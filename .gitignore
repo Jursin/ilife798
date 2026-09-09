@@ -1,0 +1,59 @@
+# Gradle & Kotlin build output
+.gradle/
+.kotlin/
+build/
+.cxx/
+.externalNativeBuild/
+/captures/
+
+# Android build artifacts
+*.apk
+*.aab
+*.ap_
+*.dex
+output.json
+
+# Local configuration & signing
+local.properties
+secrets.properties
+iosApp/Configuration/Secrets.xcconfig
+*.jks
+*.keystore
+
+# Android Studio / IntelliJ
+.idea/
+*.iml
+.navigation/
+
+# Xcode / iOS
+xcuserdata/
+*.xcuserstate
+DerivedData/
+*.xccheckout
+*.moved-aside
+*.xcscmblueprint
+*.xcodeproj/*
+!*.xcodeproj/project.pbxproj
+!*.xcodeproj/xcshareddata/
+!*.xcodeproj/project.xcworkspace/*
+*.xcworkspace/*
+!*.xcworkspace/contents.xcworkspacedata
+
+# CocoaPods
+Pods/
+Podfile.lock
+
+# Node
+node_modules/
+
+# Misc
+.DS_Store
+*.log
+*.hprof
+*.orig
+*.rej
+.env
+
+# Local-only docs
+AGENTS.md
+docs/

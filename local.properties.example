@@ -1,0 +1,8 @@
+# Android SDK
+sdk.dir=
+
+# Release 签名配置
+signing.storeFile=
+signing.storePassword=
+signing.keyAlias=
+signing.keyPassword=
