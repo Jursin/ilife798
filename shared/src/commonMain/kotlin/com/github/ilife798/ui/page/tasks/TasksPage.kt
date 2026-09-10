@@ -60,16 +60,6 @@ fun TasksPage(viewModel: AppViewModel) {
     val blurBackdrop = rememberAppBlurBackdrop(state.appBlur)
     var showStopDialog by remember { mutableStateOf(false) }
 
-    val lastMissionsLoad = remember { mutableStateOf(0L) }
-
-    LaunchedEffect(Unit) {
-        val now = com.github.ilife798.util.currentTimeMillis()
-        if (now - lastMissionsLoad.value > 5000) {
-            lastMissionsLoad.value = now
-            viewModel.loadMissions()
-        }
-    }
-
     // Check if all tasks are already completed
     LaunchedEffect(missions) {
         if (missions.isNotEmpty() && !viewModel.isLoading && !state.taskCompleted) {
@@ -111,9 +101,13 @@ fun TasksPage(viewModel: AppViewModel) {
             Button(
                 modifier = Modifier.fillMaxWidth(),
                 onClick = {
-                    if (isLoading) showStopDialog = true else viewModel.runAllTasks()
+                    when {
+                        isLoading -> showStopDialog = true
+                        state.account.token.isEmpty() -> showToast("请先完成积分登录")
+                        else -> viewModel.runAllTasks()
+                    }
                 },
-                enabled = (!isLoading && !state.taskCompleted && state.account.token.isNotEmpty() && state.account.uid.isNotEmpty()) || isLoading,
+                enabled = (!isLoading && !state.taskCompleted) || isLoading,
                 colors = primaryButtonColors(state.dynamicColor)
             ) {
                 if (isLoading) {
@@ -192,7 +186,8 @@ fun TasksPage(viewModel: AppViewModel) {
                         }
                     }
                 }
-            } else if (!state.account.pointsLoginDone) {
+            } else {
+                val isLoggedIn = state.account.appToken.isNotEmpty() || state.account.token.isNotEmpty()
                 Card(modifier = Modifier.fillMaxWidth()) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Text(
@@ -202,7 +197,7 @@ fun TasksPage(viewModel: AppViewModel) {
                         )
                         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                         Text(
-                            text = "请先完成积分登录",
+                            text = if (isLoggedIn) "暂无数据" else "请先登录",
                             style = MiuixTheme.textStyles.body2,
                             color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                             modifier = Modifier.padding(vertical = 8.dp)

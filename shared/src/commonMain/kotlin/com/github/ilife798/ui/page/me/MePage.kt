@@ -119,7 +119,6 @@ private fun AccountSection(
     val account = viewModel.state.account
     val accountInfo = viewModel.state.accountInfo
     val hasApp = account.appToken.isNotEmpty()
-    val hasPoints = account.pointsLoginDone
     val dynamicColor = viewModel.state.dynamicColor
     var showLogoutDialog by remember { mutableStateOf(false) }
 
@@ -226,9 +225,7 @@ private fun AccountSection(
                 }
                 Button(
                     modifier = Modifier.weight(1f),
-                    onClick = {
-                        if (hasPoints) onScoreClick() else onLoginClick(true)
-                    },
+                    onClick = onScoreClick,
                     colors = primaryButtonColors(dynamicColor)
                 ) {
                     Icon(
@@ -236,7 +233,7 @@ private fun AccountSection(
                         contentDescription = "积分"
                     )
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text(text = if (hasPoints) "积分明细" else "积分登录")
+                    Text(text = "积分明细")
                 }
             }
         }

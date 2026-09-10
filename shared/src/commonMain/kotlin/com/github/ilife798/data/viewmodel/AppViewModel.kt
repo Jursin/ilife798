@@ -13,12 +13,12 @@ import com.github.ilife798.data.api.ScoreDto
 import com.github.ilife798.data.model.Account
 import com.github.ilife798.data.model.AccountInfo
 import com.github.ilife798.data.model.AppState
-import com.github.ilife798.data.model.BillRecord
 import com.github.ilife798.data.model.Device
 import com.github.ilife798.data.model.MissionInfo
 import com.github.ilife798.data.model.PointsInfo
 import com.github.ilife798.data.model.RechargeProduct
 import com.github.ilife798.data.model.RefundProgress
+import com.github.ilife798.data.model.ScoreFilter
 import com.github.ilife798.data.model.ScoreRecord
 import com.github.ilife798.data.model.SpendingStats
 import com.github.ilife798.data.model.TaskRecord
@@ -29,6 +29,7 @@ import com.github.ilife798.AppStorage
 import com.github.ilife798.StorageKeys
 import com.github.ilife798.pay.AlipayPayResult
 import com.github.ilife798.pay.payWithAlipay
+import com.github.ilife798.logDebug
 import com.github.ilife798.showToast
 import com.github.ilife798.util.currentTimeMillis
 import com.github.ilife798.util.currentTimeFormatted
@@ -56,12 +57,18 @@ class AppViewModel : ViewModel() {
 
     private val api = IlifeApi()
     private val rateLimiter = TokenRateLimiter()
+
+    private fun logError(scope: String, e: Exception) {
+        logDebug("ILife798", "$scope: ${e.message}")
+    }
+
+    private fun isCurrentToken(token: String): Boolean =
+        token.isNotEmpty() && (state.account.token == token || state.account.appToken == token)
     private var taskJob: Job? = null
     private var lastMissionsLoadTime = 0L
     private var lastScoreLoadTime = 0L
     private var lastAccountLoadTime = 0L
     private var lastDeviceLoadTime = 0L
-    private var lastBillLoadTime = 0L
     private var lastSpendingLoadTime = 0L
 
     var state by mutableStateOf(AppState())
@@ -78,13 +85,14 @@ class AppViewModel : ViewModel() {
 
     init {
         api.onSessionExpired = { handleSessionExpired() }
+        api.onApiError = { showToast(it) }
         loadSavedAccount()
     }
 
     private fun handleSessionExpired() {
         if (state.account.token.isEmpty() && state.account.appToken.isEmpty()) return
         showToast("登录状态失效，请重新登录")
-        logout()
+        clearLoginState()
     }
 
     private fun loadSavedAccount() {
@@ -104,7 +112,9 @@ class AppViewModel : ViewModel() {
                 state = state.copy(account = account)
                 checkLoginStatus()
             }
-        } catch (_: Exception) {}
+        } catch (e: Exception) {
+            logError("loadSavedAccount", e)
+        }
     }
 
     private fun checkLoginStatus() {
@@ -120,7 +130,8 @@ class AppViewModel : ViewModel() {
                 } else {
                     handleSessionExpired()
                 }
-            } catch (_: Exception) {
+            } catch (e: Exception) {
+                logError("checkLoginStatus", e)
                 handleSessionExpired()
             }
         }
@@ -137,27 +148,86 @@ class AppViewModel : ViewModel() {
             storage.saveString(StorageKeys.EID, account.eid)
             storage.saveString(StorageKeys.TOKEN, account.token)
             storage.saveString(StorageKeys.APP_TOKEN, account.appToken)
-        } catch (_: Exception) {}
+        } catch (e: Exception) {
+            logError("saveAccount", e)
+        }
     }
 
-    // 账号信息页手动填写凭据（如导入官方 token/uid）
+    // 账号信息页手动填写凭据（如导入官方 token）：校验有效性、渠道与同一账户
     fun updateAccountField(field: String, value: String) {
-        val acc = state.account
-        val updated = when (field) {
-            "appToken" -> acc.copy(appToken = value, isLoggedIn = true)
-            "token" -> acc.copy(token = value, isLoggedIn = true, pointsLoginDone = true)
-            else -> return
-        }
-        state = state.copy(account = updated)
-        saveAccount()
-        if (field == "appToken" || field == "token") {
-            lastDeviceLoadTime = 0L
-            lastScoreLoadTime = 0L
-            lastAccountLoadTime = 0L
+        val input = value.trim()
+        if (input.isEmpty()) return
+        viewModelScope.launch {
+            val probe = try {
+                api.probeToken(input)
+            } catch (e: Exception) {
+                logError("probeToken", e)
+                null
+            }
+            if (probe == null || (!probe.appValid && !probe.mainValid)) {
+                showToast("登录信息无效，未保存")
+                return@launch
+            }
+            // 自动纠正到正确的槽位：仅当目标渠道不可用、另一渠道可用时兜底纠正
+            var target = field
+            if (field == "appToken" && !probe.appValid && probe.mainValid) {
+                target = "token"
+                showToast("检测为积分登录信息，已填入积分任务")
+            } else if (field == "token" && !probe.mainValid && probe.appValid) {
+                target = "appToken"
+                showToast("检测为设备登录信息，已填入设备控制")
+            }
+            // 同一账户校验：与另一槽已有凭据的 uid 比对
+            val otherToken = if (target == "appToken") state.account.token else state.account.appToken
+            if (otherToken.isNotEmpty()) {
+                val otherUid = try {
+                    api.getAccountInfo(otherToken, notifyExpiry = false)?.id ?: ""
+                } catch (e: Exception) {
+                    logError("verifyOtherToken", e)
+                    ""
+                }
+                if (probe.uid.isNotEmpty() && otherUid.isNotEmpty() && probe.uid != otherUid) {
+                    showToast("两条登录信息不属于同一账户，未保存")
+                    return@launch
+                }
+            }
+            val acc = state.account
+            val updated = when (target) {
+                "appToken" -> acc.copy(appToken = input, isLoggedIn = true, uid = probe.uid.ifEmpty { acc.uid })
+                "token" -> acc.copy(token = input, isLoggedIn = true, pointsLoginDone = true, uid = probe.uid.ifEmpty { acc.uid })
+                else -> return@launch
+            }
+            // 凭据变更等于切换身份，先清掉上一个身份残留的数据与冷却计时，再加载
+            clearAccountData()
+            state = state.copy(account = updated)
+            saveAccount()
             loadDeviceInfo()
             loadAccountInfo()
             loadScoreInfo()
+            loadSpendingStats()
+            loadMissions()
+            showToast("登录信息已保存")
         }
+    }
+
+    // 账号信息页清空指定渠道的凭据（长按编辑时使用）
+    fun clearAccountField(field: String) {
+        val acc = state.account
+        val updated = when (field) {
+            "appToken" -> acc.copy(appToken = "")
+            "token" -> acc.copy(token = "", pointsLoginDone = false)
+            else -> return
+        }
+        val stillLoggedIn = updated.appToken.isNotEmpty() || updated.token.isNotEmpty()
+        clearAccountData()
+        state = state.copy(account = updated.copy(isLoggedIn = stillLoggedIn))
+        saveAccount()
+        loadDeviceInfo(force = true)
+        loadAccountInfo()
+        loadScoreInfo()
+        loadSpendingStats()
+        loadMissions()
+        showToast(if (field == "appToken") "已清空设备控制" else "已清空积分任务")
     }
 
     // --- Captcha ---
@@ -207,11 +277,16 @@ class AppViewModel : ViewModel() {
                 val code = obj["code"]?.jsonPrimitive?.content?.toIntOrNull() ?: -1
                 if (code == 0) {
                     smsSent = true
+                    showToast("验证码已发送")
                 } else {
-                    errorMessage = obj["msg"]?.jsonPrimitive?.content ?: "发送验证码失败"
+                    val msg = obj["msg"]?.jsonPrimitive?.content ?: "发送验证码失败"
+                    errorMessage = msg
+                    showToast(msg)
                 }
             } catch (e: Exception) {
-                errorMessage = "发送验证码失败: ${e.message}"
+                val msg = "发送验证码失败: ${e.message}"
+                errorMessage = msg
+                showToast(msg)
             } finally {
                 isLoading = false
             }
@@ -233,6 +308,7 @@ class AppViewModel : ViewModel() {
             try {
                 val result = api.login(phone, smsCode, isAlipay)
                 if (result.success) {
+                    clearAccountData()
                     val prev = state.account
                     state = state.copy(
                         account = prev.copy(
@@ -248,21 +324,48 @@ class AppViewModel : ViewModel() {
                     loadDeviceInfo()
                     loadAccountInfo()
                     if (isAlipay) loadScoreInfo()
+                    loadSpendingStats()
+                    resetCaptcha()
+                    loginType = null
                     saveAccount()
+                    showToast("登录成功")
                 } else {
                     errorMessage = result.error
+                    showToast(result.error.ifEmpty { "登录失败" })
                 }
             } catch (e: Exception) {
-                errorMessage = "登录失败: ${e.message}"
+                val msg = "登录失败: ${e.message}"
+                errorMessage = msg
+                showToast(msg)
             } finally {
                 isLoading = false
             }
         }
     }
 
-    fun logout() {
+    private fun clearAccountData() {
+        taskJob?.cancel()
+        taskJob = null
+        pollingDeviceId = null
+        missions = emptyList()
+        spendingStats = SpendingStats()
+        rechargeProducts = emptyList()
+        refundProgress = null
+        scoreHasMore = false
+        scoreLoadingMore = false
+        scorePage = 0
+        scoreLoadToken = ""
+        scoreFilter = ScoreFilter.All
+        billHasMore = false
+        billLoadingMore = false
+        billPage = 0
+        billLoadToken = ""
+        lastMissionsLoadTime = 0L
+        lastScoreLoadTime = 0L
+        lastAccountLoadTime = 0L
+        lastDeviceLoadTime = 0L
+        lastSpendingLoadTime = 0L
         state = state.copy(
-            account = Account(),
             devices = emptyList(),
             points = PointsInfo(),
             accountInfo = AccountInfo(),
@@ -272,9 +375,23 @@ class AppViewModel : ViewModel() {
             billRecords = emptyList(),
             taskRecords = emptyList(),
             taskLogs = emptyList(),
-            taskCompleted = false
+            taskCompleted = false,
+            weekMask = 0
         )
-        missions = emptyList()
+    }
+
+    fun logout() {
+        clearLoginState()
+        showToast("已退出登录")
+    }
+
+    private fun clearLoginState() {
+        clearAccountData()
+        resetCaptcha()
+        loginType = null
+        isLoading = false
+        errorMessage = null
+        state = state.copy(account = Account())
         try {
             val storage = AppStorage.instance
             storage.saveBoolean(StorageKeys.IS_LOGGED_IN, false)
@@ -284,17 +401,19 @@ class AppViewModel : ViewModel() {
             storage.saveString(StorageKeys.EID, "")
             storage.saveString(StorageKeys.TOKEN, "")
             storage.saveString(StorageKeys.APP_TOKEN, "")
-        } catch (_: Exception) {}
+        } catch (e: Exception) {
+            logError("logout", e)
+        }
     }
 
     // --- Devices ---
-    fun loadDeviceInfo() {
+    fun loadDeviceInfo(force: Boolean = false) {
         val useApp = state.account.appToken.isNotEmpty()
         val token = if (useApp) state.account.appToken else state.account.token
         val appType = if (useApp) "1,1" else "1,5"
         if (token.isEmpty()) return
         val now = currentTimeMillis()
-        if (now - lastDeviceLoadTime < 5000) return
+        if (!force && now - lastDeviceLoadTime < 5000) return
         lastDeviceLoadTime = now
         viewModelScope.launch {
             try {
@@ -308,23 +427,22 @@ class AppViewModel : ViewModel() {
                 }
                 val devices = master.devices
                 val updatedDevices = devices.map { dto ->
-                    val realStatus = try { api.getDevStatus(token, dto.id, appType) } catch (_: Exception) { null }
-                    val home = try { api.getDevHome(token, dto.id, appType) } catch (_: Exception) { null }
+                    val realStatus = try { api.getDevStatus(token, dto.id, appType) } catch (e: Exception) { logError("loadDeviceInfo.getDevStatus", e); null }
                     Device(
                         id = dto.id,
                         name = dto.name,
                         status = dto.status,
                         geneStatus = realStatus?.geneStatus ?: dto.geneStatus,
-                        deviceStatus = realStatus?.deviceStatus ?: 1,
-                        ownerId = dto.ownerId,
-                        shareUserId = home?.shareUserId ?: ""
+                        deviceStatus = realStatus?.deviceStatus ?: 1
                     )
                 }
                 state = state.copy(
                     devices = updatedDevices,
                     account = state.account.copy(uid = master.accountId.ifEmpty { state.account.uid })
                 )
-            } catch (_: Exception) {}
+            } catch (e: Exception) {
+                logError("loadDeviceInfo", e)
+            }
         }
     }
 
@@ -346,7 +464,9 @@ class AppViewModel : ViewModel() {
                 if (state.accountInfo != newInfo) {
                     state = state.copy(accountInfo = newInfo)
                 }
-            } catch (_: Exception) {}
+            } catch (e: Exception) {
+                logError("loadAccountInfo", e)
+            }
         }
     }
 
@@ -355,9 +475,15 @@ class AppViewModel : ViewModel() {
         if (token.isEmpty()) return
         viewModelScope.launch {
             try {
-                api.devFavo(token, id, remove = false)
-                loadDeviceInfo()
-            } catch (_: Exception) {}
+                val result = api.devFavo(token, id, remove = false)
+                if (result.success) {
+                    showToast("设备已添加")
+                    loadDeviceInfo(force = true)
+                }
+            } catch (e: Exception) {
+                logError("addDevice", e)
+                showToast("添加失败：${e.message}")
+            }
         }
     }
 
@@ -366,9 +492,15 @@ class AppViewModel : ViewModel() {
         if (token.isEmpty()) return
         viewModelScope.launch {
             try {
-                api.devFavo(token, deviceId, remove = true)
-                loadDeviceInfo()
-            } catch (_: Exception) {}
+                val result = api.devFavo(token, deviceId, remove = true)
+                if (result.success) {
+                    showToast("设备已删除")
+                    loadDeviceInfo(force = true)
+                }
+            } catch (e: Exception) {
+                logError("removeDevice", e)
+                showToast("删除失败：${e.message}")
+            }
         }
     }
 
@@ -380,43 +512,41 @@ class AppViewModel : ViewModel() {
         pollingDeviceId = deviceId
         viewModelScope.launch {
             try {
+                if (!isCurrentToken(token)) return@launch
                 val currentStatus = api.getDevStatus(token, deviceId, appType)
-                println("DEV: toggle $deviceId currentGene=${currentStatus?.geneStatus} currentDevice=${currentStatus?.deviceStatus}")
-                val result = if (currentStatus?.geneStatus == 99) {
+                val starting = currentStatus?.geneStatus == 99
+                val result = if (starting) {
                     api.setUseScore(token, useScore = 1, appType = appType)
                     // 优先钱袋支付（91），余额不足等失败时自动切换支付宝免密支付（21）
-                    val wallet = api.devStart(token, deviceId, appType, ptype = PAY_TYPE_WALLET)
+                    val wallet = api.devStart(token, deviceId, appType, ptype = PAY_TYPE_WALLET, reportError = false)
                     if (wallet.success) {
                         wallet
                     } else {
-                        println("DEV: wallet start failed code=${wallet.code} msg=${wallet.message}, fallback to alipay")
                         api.devStart(token, deviceId, appType, ptype = PAY_TYPE_ALIPAY)
                     }
                 } else {
                     api.devEnd(token, deviceId, appType)
                 }
-                if (!result.success) {
-                    showToast(result.message.ifEmpty { "操作失败" })
-                    pollingDeviceId = null
-                    return@launch
-                }
+                if (!result.success) return@launch
+                showToast(if (starting) "设备已启动" else "设备已停止")
                 // 第一轮：5次 × 2.5秒（官方参数）
                 var newStatus: DevStatusResult? = null
                 for (i in 1..5) {
                     delay(2500.milliseconds)
+                    if (!isCurrentToken(token)) return@launch
                     newStatus = api.getDevStatus(token, deviceId, appType)
-                    println("DEV: poll1 $i $deviceId gene=${newStatus?.geneStatus} device=${newStatus?.deviceStatus}")
                     if (newStatus?.geneStatus != currentStatus?.geneStatus) break
                 }
                 // 第二轮（如需）：25次 × 5秒
                 if (newStatus?.geneStatus == currentStatus?.geneStatus) {
                     for (i in 1..25) {
                         delay(5000.milliseconds)
+                        if (!isCurrentToken(token)) return@launch
                         newStatus = api.getDevStatus(token, deviceId, appType)
-                        println("DEV: poll2 $i $deviceId gene=${newStatus?.geneStatus} device=${newStatus?.deviceStatus}")
                         if (newStatus?.geneStatus != currentStatus?.geneStatus) break
                     }
                 }
+                if (!isCurrentToken(token)) return@launch
                 state = state.copy(
                     devices = state.devices.map {
                         if (it.id == deviceId) it.copy(
@@ -426,10 +556,10 @@ class AppViewModel : ViewModel() {
                     }
                 )
             } catch (e: Exception) {
-                println("DEV: toggle error: ${e.message}")
                 showToast("操作失败：${e.message}")
+            } finally {
+                if (pollingDeviceId == deviceId) pollingDeviceId = null
             }
-            pollingDeviceId = null
         }
     }
 
@@ -441,26 +571,34 @@ class AppViewModel : ViewModel() {
         private set
     var scoreHasMore by mutableStateOf(false)
         private set
+    var scoreFilter by mutableStateOf(ScoreFilter.All)
+        private set
     private var scorePage = 0
     private var scoreLoadToken = ""
 
     private fun toScoreRecord(dto: ScoreDto) = ScoreRecord(score = dto.score, name = dto.name, time = dto.time)
 
+    // 积分数据读取优先用设备登录凭据（appToken），与设备/账单保持一致
+    private fun scoreToken(): String = state.account.appToken.ifEmpty { state.account.token }
+
     private fun loadScoreFirstPage(token: String) {
+        val src = scoreFilter.src
         viewModelScope.launch {
             try {
-                val result = api.getScoreList(token, page = 0, size = SCORE_PAGE_SIZE)
-                if (state.account.token != token) return@launch
+                val result = api.getScoreList(token, page = 0, size = SCORE_PAGE_SIZE, src = src)
+                if (scoreToken() != token || scoreFilter.src != src) return@launch
                 scoreLoadToken = token
                 scorePage = 0
                 scoreHasMore = result.total > result.records.size
                 state = state.copy(scoreRecords = result.records.map(::toScoreRecord))
-            } catch (_: Exception) {}
+            } catch (e: Exception) {
+                logError("loadScoreFirstPage", e)
+            }
         }
     }
 
     fun loadScoreInfo() {
-        val token = state.account.token
+        val token = scoreToken()
         if (token.isEmpty()) return
         val now = currentTimeMillis()
         if (now - lastScoreLoadTime < 5000) return
@@ -470,27 +608,40 @@ class AppViewModel : ViewModel() {
     }
 
     fun loadScoreInfoNoCooldown() {
-        val token = state.account.token
+        val token = scoreToken()
         if (token.isEmpty()) return
         loadScoreFirstPage(token)
     }
 
+    fun selectScoreFilter(filter: ScoreFilter) {
+        if (scoreFilter == filter) return
+        scoreFilter = filter
+        scorePage = 0
+        scoreHasMore = false
+        scoreLoadToken = ""
+        state = state.copy(scoreRecords = emptyList())
+        val token = scoreToken()
+        if (token.isNotEmpty()) loadScoreFirstPage(token)
+    }
+
     fun loadMoreScores() {
-        val token = state.account.token
+        val token = scoreToken()
         if (token.isEmpty() || scoreLoadingMore || !scoreHasMore || scoreLoadToken != token) return
         scoreLoadingMore = true
+        val src = scoreFilter.src
         viewModelScope.launch {
             try {
                 val nextPage = scorePage + 1
-                val result = api.getScoreList(token, page = nextPage, size = SCORE_PAGE_SIZE)
-                if (state.account.token != token) return@launch
+                val result = api.getScoreList(token, page = nextPage, size = SCORE_PAGE_SIZE, src = src)
+                if (scoreToken() != token || scoreFilter.src != src) return@launch
                 scorePage = nextPage
                 val seen = state.scoreRecords.map { "${it.time}|${it.score}|${it.name}" }.toMutableSet()
                 val appended = result.records.map(::toScoreRecord)
                     .filter { seen.add("${it.time}|${it.score}|${it.name}") }
                 state = state.copy(scoreRecords = state.scoreRecords + appended)
                 scoreHasMore = (scorePage + 1) * SCORE_PAGE_SIZE < result.total
-            } catch (_: Exception) {
+            } catch (e: Exception) {
+                logError("loadMoreScores", e)
             } finally {
                 scoreLoadingMore = false
             }
@@ -499,19 +650,21 @@ class AppViewModel : ViewModel() {
 
     // 积分概览
     fun loadScoreSummary() {
-        val token = state.account.token
+        val token = scoreToken()
         if (token.isEmpty()) return
         viewModelScope.launch {
             try {
                 val result = api.getMissionList(token)
-                if (state.account.token != token) return@launch
+                if (scoreToken() != token) return@launch
                 state = state.copy(
                     points = state.points.copy(
                         available = result.validScore ?: state.points.available,
                         total = result.totalScore ?: state.points.total
                     )
                 )
-            } catch (_: Exception) {}
+            } catch (e: Exception) {
+                logError("loadScoreSummary", e)
+            }
         }
     }
 
@@ -552,7 +705,9 @@ class AppViewModel : ViewModel() {
                 state = state.copy(wallets = wallets, activeWalletId = activeId)
                 refundProgress = result.refundProgress
                 wallets.firstOrNull { it.id == activeId }?.let { loadWalletDetail(it) }
-            } catch (_: Exception) {}
+            } catch (e: Exception) {
+                logError("loadWallet", e)
+            }
         }
     }
 
@@ -578,7 +733,9 @@ class AppViewModel : ViewModel() {
                         } else it
                     }
                 )
-            } catch (_: Exception) {}
+            } catch (e: Exception) {
+                logError("loadWalletDetail", e)
+            }
         }
     }
 
@@ -598,17 +755,10 @@ class AppViewModel : ViewModel() {
                 billPage = 0
                 billHasMore = result.total > result.records.size
                 state = state.copy(billRecords = result.records)
-            } catch (_: Exception) {}
+            } catch (e: Exception) {
+                logError("loadBillFirstPage", e)
+            }
         }
-    }
-
-    fun loadBills() {
-        val token = walletToken()
-        if (token.isEmpty()) return
-        val now = currentTimeMillis()
-        if (now - lastBillLoadTime < 5000) return
-        lastBillLoadTime = now
-        loadBillFirstPage(token)
     }
 
     fun loadBillsNoCooldown() {
@@ -631,7 +781,8 @@ class AppViewModel : ViewModel() {
                 val appended = result.records.filter { it.id.isEmpty() || seen.add(it.id) }
                 state = state.copy(billRecords = state.billRecords + appended)
                 billHasMore = (billPage + 1) * BILL_PAGE_SIZE < result.total
-            } catch (_: Exception) {
+            } catch (e: Exception) {
+                logError("loadMoreBills", e)
             } finally {
                 billLoadingMore = false
             }
@@ -689,7 +840,9 @@ class AppViewModel : ViewModel() {
                     yesterday = yesterday,
                     monthAverage = if (spendingDays > 0) monthTotal / spendingDays else 0.0
                 )
-            } catch (_: Exception) {}
+            } catch (e: Exception) {
+                logError("loadSpendingStats", e)
+            }
         }
     }
 
@@ -711,7 +864,8 @@ class AppViewModel : ViewModel() {
                 val products = api.getRechargeProducts(token, wallet.eid)
                 if (walletToken() != token || state.activeWalletId != wallet.id) return@launch
                 rechargeProducts = products
-            } catch (_: Exception) {
+            } catch (e: Exception) {
+                logError("loadRechargeProducts", e)
             } finally {
                 rechargeLoading = false
             }
@@ -728,9 +882,9 @@ class AppViewModel : ViewModel() {
         rechargePaying = true
         return try {
             val orderId = api.createRechargeOrder(token, wallet.eid, wallet.ownerId, product.id)
-                ?: return AlipayPayResult(false, "", "创建充值订单失败")
+                ?: return AlipayPayResult(false, "", "")
             val orderInfo = api.prepayAlipay(token, orderId)
-                ?: return AlipayPayResult(false, "", "获取支付参数失败")
+                ?: return AlipayPayResult(false, "", "")
             val result = payWithAlipay(orderInfo)
             if (result.success) {
                 loadWallet()
@@ -761,8 +915,11 @@ class AppViewModel : ViewModel() {
             if (result.success) {
                 loadWallet()
                 loadBillsNoCooldown()
+                result
+            } else {
+                // 失败信息已由 API 层统一 Toast，这里返回空信息避免重复
+                DevResult(false, result.code, "")
             }
-            result
         } catch (e: Exception) {
             DevResult(false, -1, "退款失败：${e.message}")
         } finally {
@@ -770,71 +927,140 @@ class AppViewModel : ViewModel() {
         }
     }
 
+    private data class MergedMissions(
+        val missions: List<MissionInfo>,
+        val weekMask: Int,
+        val dailyAdId: String,
+        val dailyScore: Int,
+        val dailyToken: String,
+        val validScore: Int?,
+        val totalScore: Int?
+    )
+
+    // 合并两个登录渠道（appToken 1,1 与 token 1,5）的任务列表，按 adId 去重并记录来源 token
+    private suspend fun fetchMergedMissions(): MergedMissions {
+        val appToken = state.account.appToken
+        val pointsToken = state.account.token
+        val tokens = buildList {
+            if (appToken.isNotEmpty()) add(appToken)
+            if (pointsToken.isNotEmpty() && pointsToken != appToken) add(pointsToken)
+        }
+        val merged = LinkedHashMap<String, MissionInfo>()
+        var weekMask = 0
+        var dailyAdId = ""
+        var dailyScore = 5
+        var dailyToken = ""
+        var validScore: Int? = null
+        var totalScore: Int? = null
+        val todayStart = getTodayStart(currentTimeMillis())
+        for (tok in tokens) {
+            val result = try {
+                api.getMissionList(tok)
+            } catch (e: Exception) {
+                logError("fetchMergedMissions.missionLst", e)
+                continue
+            }
+            if (dailyToken.isEmpty() && result.dailyAdId.isNotBlank()) {
+                dailyAdId = result.dailyAdId
+                dailyScore = result.dailyScore
+                dailyToken = tok
+            }
+            weekMask = weekMask or result.weekMask
+            result.validScore?.let { v -> validScore = validScore?.let { maxOf(it, v) } ?: v }
+            result.totalScore?.let { v -> totalScore = totalScore?.let { maxOf(it, v) } ?: v }
+
+            val todayCount = mutableMapOf<String, Int>()
+            val scores = try {
+                api.getScoreList(tok).records
+            } catch (e: Exception) {
+                logError("fetchMergedMissions.scoreLst", e)
+                emptyList()
+            }
+            for (score in scores) {
+                if (score.score > 0 && score.adId.isNotEmpty()) {
+                    val timeMs = score.time.toLongOrNull() ?: continue
+                    if (timeMs >= todayStart) {
+                        todayCount[score.adId] = (todayCount[score.adId] ?: 0) + 1
+                    }
+                }
+            }
+
+            for (m in result.missions) {
+                if (m.adId.isBlank()) continue
+                val done = maxOf(m.dailyCompleted, todayCount[m.adId] ?: 0)
+                val existing = merged[m.adId]
+                if (existing == null) {
+                    merged[m.adId] = MissionInfo(
+                        adId = m.adId,
+                        name = m.name,
+                        score = m.score,
+                        limit = m.limit,
+                        dailyCompleted = done,
+                        isDailySignin = m.isDailySignin,
+                        sourceToken = tok
+                    )
+                } else {
+                    val keepExisting = existing.limit > 0 || m.limit <= 0
+                    merged[m.adId] = existing.copy(
+                        name = existing.name.ifBlank { m.name },
+                        score = maxOf(existing.score, m.score),
+                        limit = if (keepExisting) existing.limit else m.limit,
+                        dailyCompleted = maxOf(existing.dailyCompleted, done),
+                        sourceToken = if (keepExisting) existing.sourceToken else tok
+                    )
+                }
+            }
+        }
+        return MergedMissions(
+            missions = merged.values.toList(),
+            weekMask = weekMask,
+            dailyAdId = dailyAdId,
+            dailyScore = dailyScore,
+            dailyToken = dailyToken,
+            validScore = validScore,
+            totalScore = totalScore
+        )
+    }
+
     fun loadMissions() {
-        val token = state.account.token
-        if (token.isEmpty()) return
+        if (state.account.appToken.isEmpty() && state.account.token.isEmpty()) return
         val now = currentTimeMillis()
         if (now - lastMissionsLoadTime < 5000) return
         lastMissionsLoadTime = now
+        val startApp = state.account.appToken
+        val startPoints = state.account.token
         viewModelScope.launch {
             try {
-                val result = api.getMissionList(token)
-
-                // Count today's completions from score-lst
-                val todayStart = com.github.ilife798.util.getTodayStart(currentTimeMillis())
-                val scores = try { api.getScoreList(token).records } catch (_: Exception) { emptyList() }
-                val todayDoneFromScore = mutableMapOf<String, Int>()
-                for (score in scores) {
-                    if (score.score > 0 && score.adId.isNotEmpty()) {
-                        val timeMs = score.time.toLongOrNull() ?: continue
-                        if (timeMs >= todayStart) {
-                            todayDoneFromScore[score.adId] = (todayDoneFromScore[score.adId] ?: 0) + 1
-                        }
-                    }
-                }
-
-                // Merge: use limits[] first, supplement with score-lst counts
-                val mergedDone = mutableMapOf<String, Int>()
-                for (m in result.missions) {
-                    val fromLimits = m.dailyCompleted
-                    val fromScore = todayDoneFromScore[m.adId] ?: 0
-                    mergedDone[m.adId] = maxOf(fromLimits, fromScore)
-                }
-
+                val merged = fetchMergedMissions()
                 // 账号已切换/退出登录，丢弃过期结果
-                if (state.account.token != token) return@launch
-
-                missions = result.missions.map {
-                    MissionInfo(
-                        adId = it.adId,
-                        name = it.name,
-                        score = it.score,
-                        limit = it.limit,
-                        dailyCompleted = mergedDone[it.adId] ?: 0,
-                        isDailySignin = it.isDailySignin
-                    )
-                }
+                if (state.account.appToken != startApp || state.account.token != startPoints) return@launch
+                missions = merged.missions
                 state = state.copy(
-                    weekMask = result.weekMask,
+                    weekMask = merged.weekMask,
                     points = state.points.copy(
-                        available = result.validScore ?: state.points.available,
-                        total = result.totalScore ?: state.points.total
+                        available = merged.validScore ?: state.points.available,
+                        total = merged.totalScore ?: state.points.total
                     )
                 )
-            } catch (_: Exception) {}
+            } catch (e: Exception) {
+                logError("loadMissions", e)
+            }
         }
     }
 
     fun runAllTasks() {
         if (state.taskCompleted || isLoading) return
-        val token = state.account.token
         val uid = state.account.uid
-        if (token.isEmpty() || uid.isEmpty()) {
+        if ((state.account.appToken.isEmpty() && state.account.token.isEmpty()) || uid.isEmpty()) {
             errorMessage = "需要积分登录才能执行任务"
             return
         }
+        val startApp = state.account.appToken
+        val startPoints = state.account.token
+        val isCurrentAccount = { state.account.appToken == startApp && state.account.token == startPoints }
         lastMissionsLoadTime = 0L
         lastScoreLoadTime = 0L
+        showToast("开始运行积分任务")
         taskJob = viewModelScope.launch {
             isLoading = true
             errorMessage = null
@@ -842,68 +1068,44 @@ class AppViewModel : ViewModel() {
             rateLimiter.clear()
             try {
                 addTaskLog("正在加载任务列表...")
-                val result = api.getMissionList(token)
-                if (result.validScore != null || result.totalScore != null) {
+                val merged = fetchMergedMissions()
+                if (merged.validScore != null || merged.totalScore != null) {
                     state = state.copy(
                         points = state.points.copy(
-                            available = result.validScore ?: state.points.available,
-                            total = result.totalScore ?: state.points.total
+                            available = merged.validScore ?: state.points.available,
+                            total = merged.totalScore ?: state.points.total
                         )
                     )
                 }
-
-                // Count today's completions from score-lst
-                val todayStart = com.github.ilife798.util.getTodayStart(currentTimeMillis())
-                val scores = try { api.getScoreList(token).records } catch (_: Exception) { emptyList() }
-                val todayDoneFromScore = mutableMapOf<String, Int>()
-                for (score in scores) {
-                    if (score.score > 0 && score.adId.isNotEmpty()) {
-                        val timeMs = score.time.toLongOrNull() ?: continue
-                        if (timeMs >= todayStart) {
-                            todayDoneFromScore[score.adId] = (todayDoneFromScore[score.adId] ?: 0) + 1
-                        }
-                    }
-                }
-
-                val missionList = result.missions.map {
-                    val fromLimits = it.dailyCompleted
-                    val fromScore = todayDoneFromScore[it.adId] ?: 0
-                    MissionInfo(
-                        adId = it.adId,
-                        name = it.name,
-                        score = it.score,
-                        limit = it.limit,
-                        dailyCompleted = maxOf(fromLimits, fromScore),
-                        isDailySignin = it.isDailySignin
-                    )
-                }
+                val missionList = merged.missions
                 missions = missionList
                 var gained = 0
 
                 // Daily sign-in
-                if (result.dailyAdId.isNotBlank()) {
+                if (merged.dailyAdId.isNotBlank() && merged.dailyToken.isNotEmpty()) {
+                    val signToken = merged.dailyToken
                     val weekDay = getDayOfWeek()
-                    val alreadySigned = (result.weekMask and (1 shl (weekDay - 1))) != 0
+                    val alreadySigned = (merged.weekMask and (1 shl (weekDay - 1))) != 0
                     if (alreadySigned) {
                         addTaskLog("每日签到: 今日已签到")
                     } else {
-                        val delay = rateLimiter.reserveDelay(token, currentTimeMillis())
+                        val delay = rateLimiter.reserveDelay(signToken, currentTimeMillis())
                         if (delay > 0) {
                             addTaskLog("等待 ${delay / 1000} 秒...")
                             delay(delay.milliseconds)
                         }
                         addTaskLog("每日签到: 执行中...")
-                        val signResult = api.signIn(token, uid, weekDay, result.dailyAdId)
+                        val signResult = api.signIn(signToken, uid, weekDay, merged.dailyAdId)
                         if (signResult.success) {
-                            gained += result.dailyScore
-                            addTaskLog("每日签到: 成功 +${result.dailyScore}分")
+                            gained += merged.dailyScore
+                            addTaskLog("每日签到: 成功 +${merged.dailyScore}分")
                         } else if (signResult.code == -98) {
                             addTaskLog("每日签到: 请求频繁，等待60秒重试...")
                             delay(60.seconds)
-                            val retryResult = api.signIn(token, uid, weekDay, result.dailyAdId)
+                            val retryResult = api.signIn(signToken, uid, weekDay, merged.dailyAdId)
                             if (retryResult.success) {
-                                gained += result.dailyScore
-                                addTaskLog("每日签到: 成功 +${result.dailyScore}分")
+                                gained += merged.dailyScore
+                                addTaskLog("每日签到: 成功 +${merged.dailyScore}分")
                             } else {
                                 addTaskLog("每日签到: 失败 ${retryResult.message}")
                             }
@@ -914,11 +1116,12 @@ class AppViewModel : ViewModel() {
                 }
 
                 // Missions - use dailyCompleted from limits[] instead of score-lst
-                val validMissions = missionList.filter { !it.isDailySignin && it.limit > 0 && it.score > 0 }
+                val validMissions = missionList.filter { !it.isDailySignin && it.limit > 0 && it.score > 0 && it.sourceToken.isNotEmpty() }
                 addTaskLog("共 ${validMissions.size} 个可执行任务")
                 var executed = 0
                 for (mission in validMissions) {
                     if (!isActive) break
+                    val execToken = mission.sourceToken
                     val completed = mission.dailyCompleted
                     val maxCount = mission.limit
                     if (completed >= maxCount) {
@@ -927,16 +1130,16 @@ class AppViewModel : ViewModel() {
                     }
                     for (round in (completed + 1)..maxCount) {
                         if (!isActive) break
-                        val delay = rateLimiter.reserveDelay(token, currentTimeMillis())
+                        val delay = rateLimiter.reserveDelay(execToken, currentTimeMillis())
                         if (delay > 0) {
                             delay(delay.milliseconds)
                         }
                         addTaskLog("[${mission.name}] ($round/$maxCount) 执行中...")
-                        var execResult = api.executeMission(token, uid, mission.adId)
+                        var execResult = api.executeMission(execToken, uid, mission.adId)
                         if (execResult.code == -98) {
                             addTaskLog("[${mission.name}] 请求频繁，等待60秒重试...")
                             delay(60.seconds)
-                            execResult = api.executeMission(token, uid, mission.adId)
+                            execResult = api.executeMission(execToken, uid, mission.adId)
                         }
                         if (execResult.success) {
                             executed++
@@ -955,8 +1158,9 @@ class AppViewModel : ViewModel() {
                         delay(30.seconds)
                     }
                 }
-                if (isActive) {
+                if (isActive && isCurrentAccount()) {
                     addTaskLog("任务完成，共获得 $gained 积分")
+                    showToast("积分任务已完成，共获得 $gained 积分")
                     val record = TaskRecord(
                         timestamp = currentTimeMillis(),
                         message = "完成任务，获得 $gained 积分"
@@ -969,13 +1173,15 @@ class AppViewModel : ViewModel() {
                     loadScoreInfo()
                 }
             } catch (_: kotlinx.coroutines.CancellationException) {
-                addTaskLog("任务已停止")
+                if (isCurrentAccount()) addTaskLog("任务已停止")
             } catch (e: Exception) {
-                addTaskLog("任务执行异常: ${e.message}")
-                errorMessage = "任务执行失败: ${e.message}"
+                if (isCurrentAccount()) {
+                    addTaskLog("任务执行异常: ${e.message}")
+                    errorMessage = "任务执行失败: ${e.message}"
+                }
             } finally {
-                isLoading = false
-                taskJob = null
+                if (isCurrentAccount()) isLoading = false
+                if (taskJob === coroutineContext[Job]) taskJob = null
             }
         }
     }
@@ -985,6 +1191,7 @@ class AppViewModel : ViewModel() {
         taskJob?.cancel()
         taskJob = null
         isLoading = false
+        showToast("积分任务已停止")
     }
 
     fun setTaskCompleted() {
@@ -1026,9 +1233,12 @@ class AppViewModel : ViewModel() {
         lastScoreLoadTime = 0L
         lastMissionsLoadTime = 0L
         lastAccountLoadTime = 0L
-        loadDeviceInfo()
+        lastSpendingLoadTime = 0L
+        loadDeviceInfo(force = true)
         loadAccountInfo()
         loadScoreInfo()
+        loadSpendingStats()
+        showToast("已刷新")
     }
 }
 

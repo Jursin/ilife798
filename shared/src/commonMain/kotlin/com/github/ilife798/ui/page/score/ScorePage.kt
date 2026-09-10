@@ -3,8 +3,10 @@ package com.github.ilife798.ui.page.score
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
@@ -26,6 +28,8 @@ import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.InfiniteProgressIndicator
 import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
 import top.yukonga.miuix.kmp.basic.Scaffold
+import top.yukonga.miuix.kmp.basic.TabRowDefaults
+import top.yukonga.miuix.kmp.basic.TabRowWithContour
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TopAppBar
 import top.yukonga.miuix.kmp.icon.MiuixIcons
@@ -34,6 +38,7 @@ import top.yukonga.miuix.kmp.icon.extended.Back
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.overScrollVertical
 import top.yukonga.miuix.kmp.utils.scrollEndHaptic
+import com.github.ilife798.data.model.ScoreFilter
 import com.github.ilife798.data.viewmodel.AppViewModel
 import com.github.ilife798.ui.theme.appBarBlur
 import com.github.ilife798.ui.theme.blurAppBarColor
@@ -52,7 +57,7 @@ fun ScorePage(viewModel: AppViewModel, onBack: () -> Unit) {
     val scrollState = rememberScrollState()
 
     LaunchedEffect(Unit) {
-        if (state.account.token.isNotEmpty()) {
+        if (state.account.appToken.isNotEmpty() || state.account.token.isNotEmpty()) {
             viewModel.refreshScorePage()
         }
     }
@@ -65,6 +70,9 @@ fun ScorePage(viewModel: AppViewModel, onBack: () -> Unit) {
     }
     LaunchedEffect(shouldLoadMore, scores.size) {
         if (shouldLoadMore) viewModel.loadMoreScores()
+    }
+    LaunchedEffect(viewModel.scoreFilter) {
+        scrollState.animateScrollTo(0)
     }
 
     Scaffold(
@@ -133,9 +141,26 @@ fun ScorePage(viewModel: AppViewModel, onBack: () -> Unit) {
                         color = MiuixTheme.colorScheme.onSurface
                     )
                     HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                    TabRowWithContour(
+                        tabs = listOf("全部", "收入", "支出"),
+                        selectedTabIndex = when (viewModel.scoreFilter) {
+                            ScoreFilter.All -> 0
+                            ScoreFilter.Income -> 1
+                            ScoreFilter.Expense -> 2
+                        },
+                        onTabSelected = { index -> viewModel.selectScoreFilter(ScoreFilter.entries[index]) },
+                        colors = TabRowDefaults.tabRowColors(
+                            backgroundColor = MiuixTheme.colorScheme.surfaceContainerHigh,
+                            contentColor = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                            selectedBackgroundColor = MiuixTheme.colorScheme.primary,
+                            selectedContentColor = MiuixTheme.colorScheme.onPrimary
+                        )
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    val isLoggedIn = state.account.appToken.isNotEmpty() || state.account.token.isNotEmpty()
                     if (scores.isEmpty()) {
                         Text(
-                            text = "暂无记录",
+                            text = if (!isLoggedIn) "请先登录" else "暂无数据",
                             style = MiuixTheme.textStyles.body2,
                             color = MiuixTheme.colorScheme.onSurfaceVariantSummary
                         )

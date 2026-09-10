@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
@@ -63,14 +62,6 @@ fun HomePage(viewModel: AppViewModel, onDeviceAddClick: () -> Unit = {}) {
     val scrollBehavior = MiuixScrollBehavior()
     val blurBackdrop = rememberAppBlurBackdrop(state.appBlur)
 
-    LaunchedEffect(Unit) {
-        if (state.account.token.isNotEmpty() || state.account.appToken.isNotEmpty()) {
-            viewModel.loadDeviceInfo()
-            viewModel.loadScoreInfo()
-            viewModel.loadSpendingStats()
-        }
-    }
-
     Scaffold(
         topBar = {
             TopAppBar(
@@ -95,6 +86,7 @@ fun HomePage(viewModel: AppViewModel, onDeviceAddClick: () -> Unit = {}) {
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             val stats = viewModel.spendingStats
+            val isLoggedIn = state.account.appToken.isNotEmpty() || state.account.token.isNotEmpty()
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -104,6 +96,7 @@ fun HomePage(viewModel: AppViewModel, onDeviceAddClick: () -> Unit = {}) {
                 SpendingCard(
                     label = "昨日花费",
                     value = stats.yesterday,
+                    isLoggedIn = isLoggedIn,
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxHeight()
@@ -111,6 +104,7 @@ fun HomePage(viewModel: AppViewModel, onDeviceAddClick: () -> Unit = {}) {
                 SpendingCard(
                     label = "今日花费",
                     value = stats.today,
+                    isLoggedIn = isLoggedIn,
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxHeight()
@@ -118,6 +112,7 @@ fun HomePage(viewModel: AppViewModel, onDeviceAddClick: () -> Unit = {}) {
                 SpendingCard(
                     label = "本月平均花费",
                     value = stats.monthAverage,
+                    isLoggedIn = isLoggedIn,
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxHeight()
@@ -129,7 +124,7 @@ fun HomePage(viewModel: AppViewModel, onDeviceAddClick: () -> Unit = {}) {
 }
 
 @Composable
-private fun SpendingCard(label: String, value: Double, modifier: Modifier = Modifier) {
+private fun SpendingCard(label: String, value: Double, isLoggedIn: Boolean, modifier: Modifier = Modifier) {
     Card(modifier = modifier) {
         Column(modifier = Modifier.padding(12.dp)) {
             Text(
@@ -138,7 +133,7 @@ private fun SpendingCard(label: String, value: Double, modifier: Modifier = Modi
                 color = MiuixTheme.colorScheme.onSurfaceVariantSummary
             )
             Text(
-                text = "¥${formatMoney(value)}",
+                text = if (isLoggedIn) "¥${formatMoney(value)}" else "--",
                 style = MiuixTheme.textStyles.title2,
                 color = MiuixTheme.colorScheme.onSurface
             )
@@ -210,7 +205,7 @@ private fun DeviceCard(viewModel: AppViewModel, onDeviceAddClick: () -> Unit) {
             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
             if (devices.isEmpty()) {
                 Text(
-                    text = "暂无设备",
+                    text = if (!isLoggedIn) "请先登录" else "暂无设备",
                     style = MiuixTheme.textStyles.body2,
                     color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                     modifier = Modifier.padding(vertical = 8.dp)
@@ -330,8 +325,8 @@ private fun DeviceItem(
         modifier = Modifier
             .fillMaxWidth()
             .clickable {
-                copyTextToClipboard(device.id)
-                showToast("已复制设备编号")
+                if (copyTextToClipboard(device.id)) showToast("已复制设备编号")
+                else showToast("复制失败")
             }
             .padding(vertical = 8.dp),
         horizontalArrangement = Arrangement.SpaceBetween,

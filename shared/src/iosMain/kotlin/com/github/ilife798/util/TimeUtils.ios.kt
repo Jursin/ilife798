@@ -3,6 +3,7 @@ package com.github.ilife798.util
 import platform.Foundation.NSCalendar
 import platform.Foundation.NSCalendarUnitDay
 import platform.Foundation.NSCalendarUnitMonth
+import platform.Foundation.NSCalendarUnitWeekOfYear
 import platform.Foundation.NSCalendarUnitYear
 import platform.Foundation.NSDate
 import platform.Foundation.NSDateFormatter
@@ -36,7 +37,7 @@ actual fun getDayOfWeek(): Int {
     val calendar = NSCalendar.currentCalendar
     val weekday = calendar.ordinalityOfUnit(
         NSCalendarUnitDay,
-        NSCalendarUnitWeek,
+        NSCalendarUnitWeekOfYear,
         NSDate()
     )
     return weekday.toInt()
@@ -59,7 +60,11 @@ actual fun getTodayStart(now: Long): Long {
 actual fun md5(input: String): String {
     val data = input.encodeToByteArray()
     val hash = md5Pure(data)
-    return hash.joinToString("") { "%02x".format(it) }
+    val hexChars = "0123456789abcdef"
+    return hash.joinToString("") { byte ->
+        val v = byte.toInt() and 0xFF
+        "${hexChars[v shr 4]}${hexChars[v and 0x0F]}"
+    }
 }
 
 private fun md5Pure(input: ByteArray): ByteArray {
@@ -120,7 +125,7 @@ private fun md5Pure(input: ByteArray): ByteArray {
             val temp = d
             d = c
             c = b
-            b = b + (((a + f + k[i] + m[g]) shl s[i]) or ((a + f + k[i] + m[g]) ushr (32 - s[i])))
+            b += ((a + f + k[i] + m[g]) shl s[i]) or ((a + f + k[i] + m[g]) ushr (32 - s[i]))
             a = temp
         }
         a0 += a; b0 += b; c0 += c; d0 += d

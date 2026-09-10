@@ -1,5 +1,6 @@
 package com.github.ilife798.ui.page.account
 
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -18,20 +19,24 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import top.yukonga.miuix.kmp.basic.BasicComponent
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Card
+import top.yukonga.miuix.kmp.basic.CardDefaults
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
 import top.yukonga.miuix.kmp.basic.Scaffold
+import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.basic.TopAppBar
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Back
 import top.yukonga.miuix.kmp.theme.LocalDismissState
+import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.overScrollVertical
 import top.yukonga.miuix.kmp.utils.scrollEndHaptic
 import top.yukonga.miuix.kmp.window.WindowDialog
@@ -45,10 +50,12 @@ import com.github.ilife798.ui.theme.blurAppBarColor
 import com.github.ilife798.ui.theme.captureForBlur
 import com.github.ilife798.ui.theme.rememberAppBlurBackdrop
 
-private enum class CredentialField(val key: String, val title: String, val editable: Boolean) {
-    APP_TOKEN("appToken", "设备控制", editable = true),
-    TOKEN("token", "积分任务", editable = true),
-    UID("uid", "用户 ID", editable = false)
+private enum class EmptyAction { EDIT, LOGIN, NONE }
+
+private enum class CredentialField(val key: String, val title: String, val emptyAction: EmptyAction) {
+    APP_TOKEN("appToken", "设备控制", EmptyAction.EDIT),
+    TOKEN("token", "积分任务", EmptyAction.LOGIN),
+    UID("uid", "用户 ID", EmptyAction.NONE)
 }
 
 private fun valueOf(account: Account, field: CredentialField): String = when (field) {
@@ -58,7 +65,11 @@ private fun valueOf(account: Account, field: CredentialField): String = when (fi
 }
 
 @Composable
-fun AccountPage(viewModel: AppViewModel, onBack: () -> Unit) {
+fun AccountPage(
+    viewModel: AppViewModel,
+    onBack: () -> Unit,
+    onLoginClick: (isAlipay: Boolean) -> Unit = {}
+) {
     val account = viewModel.state.account
     val scrollBehavior = MiuixScrollBehavior()
     val blurBackdrop = rememberAppBlurBackdrop(viewModel.state.appBlur)
@@ -101,21 +112,57 @@ fun AccountPage(viewModel: AppViewModel, onBack: () -> Unit) {
                 Column {
                     CredentialField.entries.forEach { field ->
                         val value = valueOf(account, field)
-                        BasicComponent(
-                            title = field.title,
-                            summary = "${field.key}: ${value.ifEmpty { "-" }}",
-                            onClick = {
-                                if (value.isNotEmpty()) {
-                                    copyTextToClipboard(value)
-                                    showToast("已复制 ${field.key}")
-                                } else if (field.editable) {
+                        val onTap = {
+                            if (value.isNotEmpty()) {
+                                if (copyTextToClipboard(value)) showToast("已复制 ${field.key}")
+                                else showToast("复制失败")
+                            } else when (field.emptyAction) {
+                                EmptyAction.EDIT -> {
                                     inputValue = ""
                                     editingField = field
                                 }
+
+                                EmptyAction.LOGIN -> onLoginClick(true)
+                                EmptyAction.NONE -> {}
                             }
-                        )
+                        }
+                        if (field == CredentialField.UID) {
+                            BasicComponent(
+                                title = field.title,
+                                summary = "${field.key}: ${value.ifEmpty { "-" }}",
+                                onClick = onTap
+                            )
+                        } else {
+                            BasicComponent(
+                                title = field.title,
+                                summary = "${field.key}: ${value.ifEmpty { "-" }}",
+                                modifier = Modifier.combinedClickable(
+                                    onClick = { onTap() },
+                                    onLongClick = {
+                                        inputValue = value
+                                        editingField = field
+                                    }
+                                )
+                            )
+                        }
                     }
                 }
+            }
+
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.defaultColors(
+                    color = MiuixTheme.colorScheme.primaryContainer.copy(alpha = 0.25f),
+                    contentColor = MiuixTheme.colorScheme.onSurface
+                )
+            ) {
+                Text(
+                    text = "设备控制为空时点击弹出输入对话框，积分任务为空时点击进入积分登录页面。有值时点击设备控制/积分任务/用户 ID 复制对应值，长按设备控制/积分任务弹出输入框。",
+                    style = MiuixTheme.textStyles.body2,
+                    color = MiuixTheme.colorScheme.primary,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.padding(16.dp)
+                )
             }
         }
     }
@@ -129,6 +176,7 @@ fun AccountPage(viewModel: AppViewModel, onBack: () -> Unit) {
             content = {
                 WindowBlurEffect(useBlur = viewModel.state.appBlur)
                 val dismiss = LocalDismissState.current
+                val hasExistingValue = valueOf(account, currentEditing).isNotEmpty()
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     TextField(
                         value = inputValue,
@@ -149,7 +197,12 @@ fun AccountPage(viewModel: AppViewModel, onBack: () -> Unit) {
                         TextButton(
                             modifier = Modifier.weight(1f),
                             onClick = {
-                                viewModel.updateAccountField(currentEditing.key, inputValue.trim())
+                                val input = inputValue.trim()
+                                if (input.isEmpty() && hasExistingValue) {
+                                    viewModel.clearAccountField(currentEditing.key)
+                                } else {
+                                    viewModel.updateAccountField(currentEditing.key, input)
+                                }
                                 dismiss?.invoke()
                             },
                             text = "确定",

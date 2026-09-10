@@ -134,6 +134,11 @@ fun MainScaffold(viewModel: AppViewModel) {
         { backStack.removeLastOrNull() }
     }
 
+    // 防止连点重复压入相同路由（Navigation 3 不允许重复 key）
+    val navigate: (Page) -> Unit = remember(backStack) {
+        { page -> if (backStack.lastOrNull() != page) backStack.add(page) }
+    }
+
     val interceptPredictiveBack = !predictiveBackEnabled && backStack.size > 1
 
     val pagerState = rememberPagerState(pageCount = { 3 })
@@ -147,6 +152,7 @@ fun MainScaffold(viewModel: AppViewModel) {
             0 -> {
                 viewModel.loadDeviceInfo()
                 viewModel.loadScoreInfo()
+                viewModel.loadSpendingStats()
             }
             1 -> viewModel.loadMissions()
             2 -> viewModel.loadAccountInfo()
@@ -193,15 +199,15 @@ fun MainScaffold(viewModel: AppViewModel) {
                             when (page) {
                                 0 -> HomePage(
                                     viewModel = viewModel,
-                                    onDeviceAddClick = { backStack.add(Page.DeviceAdd) }
+                                    onDeviceAddClick = { navigate(Page.DeviceAdd) }
                                 )
                                 1 -> TasksPage(viewModel = viewModel)
                                 2 -> MePage(
                                     viewModel = viewModel,
-                                    onLoginClick = { isAlipay -> backStack.add(Page.Login(isAlipay = isAlipay)) },
-                                    onScoreClick = { backStack.add(Page.Score) },
-                                    onAccountClick = { backStack.add(Page.Account) },
-                                    onBillClick = { backStack.add(Page.Bill) }
+                                    onLoginClick = { isAlipay -> navigate(Page.Login(isAlipay = isAlipay)) },
+                                    onScoreClick = { navigate(Page.Score) },
+                                    onAccountClick = { navigate(Page.Account) },
+                                    onBillClick = { navigate(Page.Bill) }
                                 )
                             }
                         }
@@ -237,7 +243,8 @@ fun MainScaffold(viewModel: AppViewModel) {
                 NavEntry(interceptPredictiveBack, onBack) {
                     AccountPage(
                         viewModel = viewModel,
-                        onBack = onBack
+                        onBack = onBack,
+                        onLoginClick = { isAlipay -> navigate(Page.Login(isAlipay = isAlipay)) }
                     )
                 }
             }

@@ -19,16 +19,13 @@ data class Device(
     val name: String,
     val status: Int = 0,
     val geneStatus: Int = 0,
-    val deviceStatus: Int = 1,
-    val ownerId: String = "",
-    val shareUserId: String = ""
+    val deviceStatus: Int = 1
 )
 
 @Serializable
 data class PointsInfo(
     val available: Int? = null,
-    val total: Int? = null,
-    val todaySpent: Double? = null
+    val total: Int? = null
 )
 
 @Serializable
@@ -44,7 +41,8 @@ data class MissionInfo(
     val score: Int = 0,
     val limit: Int = 1,
     val dailyCompleted: Int = 0,
-    val isDailySignin: Boolean = false
+    val isDailySignin: Boolean = false,
+    val sourceToken: String = ""
 )
 
 @Serializable
@@ -54,13 +52,14 @@ data class ScoreRecord(
     val time: String = ""
 )
 
+enum class ScoreFilter(val src: Int?) { All(null), Income(101), Expense(105) }
+
 @Serializable
 data class WalletAccount(
     val id: String = "",
     val eid: String = "",
     val ownerId: String = "",
     val name: String = "",
-    val abbr: String = "",
     val olCash: Double = 0.0,
     val olGift: Double = 0.0,
     val ofCash: Double = 0.0,
@@ -70,7 +69,6 @@ data class WalletAccount(
     val chargeEnabled: Boolean = true,
     val refundEnabled: Boolean = true
 ) {
-    val cashBalance: Double get() = olCash + ofCash
     val refundable: Double get() = if (auth) olCash + ofCash else olCash
 }
 
@@ -79,11 +77,8 @@ data class RechargeProduct(
     val id: String = "",
     val name: String = "",
     val price: Double = 0.0,
-    val originalPrice: Double = 0.0,
-    val description: String = ""
-) {
-    val hasDiscount: Boolean get() = originalPrice > price
-}
+    val originalPrice: Double = 0.0
+)
 
 @Serializable
 data class RefundProgress(
@@ -111,8 +106,7 @@ data class BillRecord(
     val status: Int = 0,
     val dir: Int = 1,
     val payment: Double = 0.0,
-    val time: Long = 0L,
-    val deviceType: Int = 0
+    val time: Long = 0L
 )
 
 enum class ThemeMode { Light, Dark, System }

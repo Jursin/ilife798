@@ -79,6 +79,7 @@ private enum class BillPanel { Records, Recharge, Refund }
 fun MyBillPage(viewModel: AppViewModel, onBack: () -> Unit) {
     val state = viewModel.state
     val wallets = state.wallets
+    val isLoggedIn = state.account.appToken.isNotEmpty() || state.account.token.isNotEmpty()
     val activeWallet = wallets.firstOrNull { it.id == state.activeWalletId } ?: wallets.firstOrNull()
     val scrollBehavior = MiuixScrollBehavior()
     val blurBackdrop = rememberAppBlurBackdrop(state.appBlur)
@@ -146,6 +147,7 @@ fun MyBillPage(viewModel: AppViewModel, onBack: () -> Unit) {
                 wallets = wallets,
                 activeWallet = activeWallet,
                 panel = panel,
+                isLoggedIn = isLoggedIn,
                 onSelectWallet = { viewModel.selectWallet(it) },
                 onToggleRecharge = {
                     panel = if (panel == BillPanel.Recharge) BillPanel.Records else BillPanel.Recharge
@@ -167,15 +169,18 @@ fun MyBillPage(viewModel: AppViewModel, onBack: () -> Unit) {
                     BillPanel.Records -> BillRecordsCard(
                         records = state.billRecords,
                         loadingMore = viewModel.billLoadingMore,
-                        hasMore = viewModel.billHasMore
+                        hasMore = viewModel.billHasMore,
+                        isLoggedIn = isLoggedIn
                     )
 
                     BillPanel.Recharge -> RechargeCard(
                         products = viewModel.rechargeProducts,
                         loading = viewModel.rechargeLoading,
                         paying = viewModel.rechargePaying,
+                        chargeEnabled = activeWallet?.chargeEnabled ?: true,
                         selectedProductId = selectedProductId,
                         dynamicColor = state.dynamicColor,
+                        isLoggedIn = isLoggedIn,
                         onSelectProduct = { selectedProductId = it },
                         onRecharge = {
                             val product = viewModel.rechargeProducts
@@ -183,7 +188,7 @@ fun MyBillPage(viewModel: AppViewModel, onBack: () -> Unit) {
                             if (product != null) {
                                 scope.launch {
                                     val result = viewModel.submitRecharge(product)
-                                    showToast(result.message)
+                                    if (result.message.isNotEmpty()) showToast(result.message)
                                 }
                             }
                         }
@@ -193,6 +198,7 @@ fun MyBillPage(viewModel: AppViewModel, onBack: () -> Unit) {
                         wallet = activeWallet,
                         refundProgress = viewModel.refundProgress,
                         paying = viewModel.refundSubmitting,
+                        isLoggedIn = isLoggedIn,
                         onRefund = { showRefundDialog = true }
                     )
                 }
@@ -209,12 +215,12 @@ fun MyBillPage(viewModel: AppViewModel, onBack: () -> Unit) {
             onConfirm = {
                 scope.launch {
                     val result = viewModel.submitRefund()
-                    if (result.success) showRefundDialog = false
-                    showToast(
-                        result.message.ifEmpty {
-                            if (result.success) "退款申请已提交" else "退款失败"
-                        }
-                    )
+                    if (result.success) {
+                        showRefundDialog = false
+                        showToast(result.message.ifEmpty { "退款申请已提交" })
+                    } else if (result.message.isNotEmpty()) {
+                        showToast(result.message)
+                    }
                 }
             }
         )
@@ -277,6 +283,7 @@ private fun WalletHeaderCard(
     wallets: List<WalletAccount>,
     activeWallet: WalletAccount?,
     panel: BillPanel,
+    isLoggedIn: Boolean,
     onSelectWallet: (String) -> Unit,
     onToggleRecharge: () -> Unit,
     onToggleRefund: () -> Unit
@@ -319,7 +326,7 @@ private fun WalletHeaderCard(
                     color = MiuixTheme.colorScheme.onSurfaceVariantSummary
                 )
                 Text(
-                    text = "¥${formatMoney(activeWallet?.total)}",
+                    text = if (isLoggedIn) "¥${formatMoney(activeWallet?.total)}" else "--",
                     style = MiuixTheme.textStyles.title1,
                     fontWeight = FontWeight.Bold,
                     color = MiuixTheme.colorScheme.onSurface
@@ -361,7 +368,8 @@ private fun WalletHeaderCard(
 private fun BillRecordsCard(
     records: List<BillRecord>,
     loadingMore: Boolean,
-    hasMore: Boolean
+    hasMore: Boolean,
+    isLoggedIn: Boolean
 ) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp)) {
@@ -373,9 +381,10 @@ private fun BillRecordsCard(
             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
             if (records.isEmpty()) {
                 Text(
-                    text = "暂无数据",
+                    text = if (!isLoggedIn) "请先登录" else "暂无数据",
                     style = MiuixTheme.textStyles.body2,
-                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary
+                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                    modifier = Modifier.padding(vertical = 8.dp)
                 )
             } else {
                 records.forEach { record ->
@@ -475,8 +484,10 @@ private fun RechargeCard(
     products: List<RechargeProduct>,
     loading: Boolean,
     paying: Boolean,
+    chargeEnabled: Boolean,
     selectedProductId: String?,
     dynamicColor: Boolean,
+    isLoggedIn: Boolean,
     onSelectProduct: (String) -> Unit,
     onRecharge: () -> Unit
 ) {
@@ -489,7 +500,15 @@ private fun RechargeCard(
                 color = MiuixTheme.colorScheme.onSurface
             )
             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-            when {
+            if (!isLoggedIn) {
+                Text(
+                    text = "请先登录",
+                    style = MiuixTheme.textStyles.body2,
+                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                    modifier = Modifier.padding(vertical = 8.dp)
+                )
+            } else {
+                when {
                 loading && products.isEmpty() -> Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -521,7 +540,7 @@ private fun RechargeCard(
                                 Button(
                                     modifier = Modifier.weight(1f),
                                     onClick = { onSelectProduct(product.id) },
-                                    enabled = !paying,
+                                    enabled = !paying && chargeEnabled,
                                     colors = if (product.id == selectedProductId) {
                                         ButtonDefaults.buttonColorsPrimary()
                                     } else {
@@ -539,13 +558,22 @@ private fun RechargeCard(
                 }
             }
             Spacer(modifier = Modifier.height(16.dp))
+            if (!chargeEnabled) {
+                Text(
+                    text = "该钱包暂不支持充值",
+                    style = MiuixTheme.textStyles.body2,
+                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+            }
             Button(
                 modifier = Modifier.fillMaxWidth(),
                 onClick = onRecharge,
-                enabled = selectedProduct != null && !paying,
+                enabled = selectedProduct != null && !paying && chargeEnabled,
                 colors = primaryButtonColors(dynamicColor)
             ) {
                 Text(text = if (paying) "充值中…" else "立即充值")
+            }
             }
         }
     }
@@ -556,6 +584,7 @@ private fun RefundCard(
     wallet: WalletAccount?,
     refundProgress: RefundProgress?,
     paying: Boolean,
+    isLoggedIn: Boolean,
     onRefund: () -> Unit
 ) {
     Card(modifier = Modifier.fillMaxWidth()) {
@@ -566,45 +595,54 @@ private fun RefundCard(
                 color = MiuixTheme.colorScheme.onSurface
             )
             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-            Text(
-                text = "¥${formatMoney(wallet?.refundable)}",
-                style = MiuixTheme.textStyles.title1,
-                fontWeight = FontWeight.Bold,
-                color = MiuixTheme.colorScheme.error
-            )
-            Text(
-                text = "赠送余额不支持退款",
-                style = MiuixTheme.textStyles.body2,
-                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                modifier = Modifier.padding(top = 2.dp)
-            )
-            Spacer(modifier = Modifier.height(16.dp))
-            BalanceBreakdown(wallet)
-            refundProgress?.takeIf { it.active }?.let { progress ->
-                val statusText = when (progress.fail) {
-                    1 -> "退款失败"
-                    0 -> "退款成功"
-                    else -> "退款审核中"
-                }
-                val statusColor = when (progress.fail) {
-                    1 -> MiuixTheme.colorScheme.error
-                    0 -> MiuixTheme.colorScheme.primary
-                    else -> MiuixTheme.colorScheme.onSurfaceVariantSummary
-                }
+            if (!isLoggedIn) {
                 Text(
-                    text = "$statusText：${progress.count}笔 ¥${formatMoney(progress.total)}元",
+                    text = "请先登录",
                     style = MiuixTheme.textStyles.body2,
-                    color = statusColor,
-                    modifier = Modifier.padding(top = 8.dp)
+                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                    modifier = Modifier.padding(vertical = 8.dp)
                 )
-            }
-            Spacer(modifier = Modifier.height(16.dp))
-            Button(
-                modifier = Modifier.fillMaxWidth(),
-                onClick = onRefund,
-                enabled = (wallet?.refundEnabled ?: true) && (wallet?.refundable ?: 0.0) > 0.0 && !paying
-            ) {
-                Text(text = if (paying) "提交中…" else "立即退款")
+            } else {
+                Text(
+                    text = "¥${formatMoney(wallet?.refundable)}",
+                    style = MiuixTheme.textStyles.title1,
+                    fontWeight = FontWeight.Bold,
+                    color = MiuixTheme.colorScheme.error
+                )
+                Text(
+                    text = "赠送余额不支持退款",
+                    style = MiuixTheme.textStyles.body2,
+                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                    modifier = Modifier.padding(top = 2.dp)
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                BalanceBreakdown(wallet)
+                refundProgress?.takeIf { it.active }?.let { progress ->
+                    val statusText = when (progress.fail) {
+                        1 -> "退款失败"
+                        0 -> "退款成功"
+                        else -> "退款审核中"
+                    }
+                    val statusColor = when (progress.fail) {
+                        1 -> MiuixTheme.colorScheme.error
+                        0 -> MiuixTheme.colorScheme.primary
+                        else -> MiuixTheme.colorScheme.onSurfaceVariantSummary
+                    }
+                    Text(
+                        text = "$statusText：${progress.count}笔 ¥${formatMoney(progress.total)}元",
+                        style = MiuixTheme.textStyles.body2,
+                        color = statusColor,
+                        modifier = Modifier.padding(top = 8.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.height(16.dp))
+                Button(
+                    modifier = Modifier.fillMaxWidth(),
+                    onClick = onRefund,
+                    enabled = (wallet?.refundEnabled ?: true) && (wallet?.refundable ?: 0.0) > 0.0 && !paying
+                ) {
+                    Text(text = if (paying) "提交中…" else "立即退款")
+                }
             }
         }
     }

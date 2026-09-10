@@ -30,9 +30,17 @@ class IlifeApi(private val client: HttpClient = createHttpClient()) {
     // 服务端在登录态失效时对所有需鉴权接口返回 code = -99
     var onSessionExpired: (() -> Unit)? = null
 
-    private suspend fun bodyJson(response: HttpResponse): JsonObject {
+    // 接口返回非 0 业务码时回调服务端错误信息，供上层直接以 Toast 展示
+    var onApiError: ((String) -> Unit)? = null
+
+    private suspend fun bodyJson(
+        response: HttpResponse,
+        notifyExpiry: Boolean = true,
+        reportError: Boolean = true
+    ): JsonObject {
         val body = json.parseToJsonElement(response.bodyAsText()).jsonObject
-        checkSessionExpired(body)
+        if (notifyExpiry) checkSessionExpired(body)
+        if (reportError) reportIfError(body)
         return body
     }
 
@@ -40,6 +48,17 @@ class IlifeApi(private val client: HttpClient = createHttpClient()) {
         if (body["code"]?.jsonPrimitive?.content?.toIntOrNull() == -99) {
             onSessionExpired?.invoke()
         }
+    }
+
+    private fun reportIfError(body: JsonObject) {
+        val code = body["code"]?.jsonPrimitive?.content?.toIntOrNull() ?: 0
+        if (code == 0 || code == -99) return
+        emitApiError(body["msg"]?.jsonPrimitive?.content)
+    }
+
+    private fun emitApiError(msg: String?) {
+        val text = msg?.trim().orEmpty()
+        if (text.isNotEmpty()) onApiError?.invoke(text)
     }
 
     // --- Captcha ---
@@ -88,19 +107,35 @@ class IlifeApi(private val client: HttpClient = createHttpClient()) {
     }
 
     // --- Account Info ---
-    suspend fun getAccountInfo(token: String): AccountInfoDto? {
+    suspend fun getAccountInfo(token: String, notifyExpiry: Boolean = true): AccountInfoDto? {
         val response = client.get("${ApiConfig.baseUrl}/ui/app/master") {
             header("Authorization", token)
             header("ApplicationType", "1,1")
         }
-        val body = bodyJson(response)
+        val body = bodyJson(response, notifyExpiry, reportError = false)
         val data = body["data"] as? JsonObject ?: return null
         val account = data["account"] as? JsonObject ?: return null
         return AccountInfoDto(
+            id = account["id"]?.jsonPrimitive?.content ?: "",
             img = account["img"]?.jsonPrimitive?.content ?: "",
             name = account["name"]?.jsonPrimitive?.content ?: "",
             pn = account["pn"]?.jsonPrimitive?.content ?: ""
         )
+    }
+
+    // 探测一条登录信息的有效性，用于手动导入校验；不触发会话失效登出
+    suspend fun probeToken(token: String): TokenProbe {
+        val appInfo = try { getAccountInfo(token, notifyExpiry = false) } catch (_: Exception) { null }
+        val mainValid = try {
+            val response = client.get("${ApiConfig.baseUrl}/acc/score/mission-lst") {
+                header("Authorization", token)
+                header("ApplicationType", "1,5")
+            }
+            bodyJson(response, notifyExpiry = false, reportError = false)["code"]?.jsonPrimitive?.content?.toIntOrNull() == 0
+        } catch (_: Exception) {
+            false
+        }
+        return TokenProbe(appValid = appInfo != null, mainValid = mainValid, uid = appInfo?.id ?: "")
     }
 
     // --- Account settings ---
@@ -111,7 +146,7 @@ class IlifeApi(private val client: HttpClient = createHttpClient()) {
             header("Authorization", token)
             header("ApplicationType", appType)
         }
-        return parseDevResult(response.bodyAsText())
+        return parseDevResult(response.bodyAsText(), reportError = false)
     }
 
     // --- Devices ---
@@ -120,7 +155,7 @@ class IlifeApi(private val client: HttpClient = createHttpClient()) {
             header("Authorization", token)
             header("ApplicationType", "1,1")
         }
-        val body = bodyJson(response)
+        val body = bodyJson(response, reportError = false)
         val data = body["data"] as? JsonObject ?: return MasterResult()
         val account = data["account"] as? JsonObject
         val accountId = account?.get("id")?.jsonPrimitive?.content ?: ""
@@ -130,20 +165,17 @@ class IlifeApi(private val client: HttpClient = createHttpClient()) {
             val gene = obj["gene"]?.jsonObject
             val deviceStatus = obj["status"]?.jsonPrimitive?.content?.toIntOrNull() ?: 0
             val geneStatus = gene?.get("status")?.jsonPrimitive?.content?.toIntOrNull() ?: 0
-            val owner = obj["owner"]?.jsonObject
-            val ownerId = owner?.get("id")?.jsonPrimitive?.content ?: ""
             DeviceDto(
                 id = obj["id"]?.jsonPrimitive?.content ?: "",
                 name = obj["name"]?.jsonPrimitive?.content ?: "",
                 status = deviceStatus,
-                geneStatus = geneStatus,
-                ownerId = ownerId
+                geneStatus = geneStatus
             )
         }
         return MasterResult(accountId, devices)
     }
 
-    suspend fun devStart(token: String, did: String, appType: String = "1,1", ptype: Int = 91): DevResult {
+    suspend fun devStart(token: String, did: String, appType: String = "1,1", ptype: Int = 91, reportError: Boolean = true): DevResult {
         val response = client.get("${ApiConfig.baseUrl}/dev/start") {
             parameter("did", did)
             parameter("upgrade", "true")
@@ -154,7 +186,7 @@ class IlifeApi(private val client: HttpClient = createHttpClient()) {
             header("Authorization", token)
             header("ApplicationType", appType)
         }
-        return parseDevResult(response.bodyAsText())
+        return parseDevResult(response.bodyAsText(), reportError)
     }
 
     suspend fun devEnd(token: String, did: String, appType: String = "1,1"): DevResult {
@@ -183,38 +215,22 @@ class IlifeApi(private val client: HttpClient = createHttpClient()) {
             header("Authorization", token)
             header("ApplicationType", appType)
         }
-        val body = bodyJson(response)
+        val body = bodyJson(response, reportError = false)
         if (body["code"]?.jsonPrimitive?.content?.toIntOrNull() != 0) return null
         val data = body["data"] as? JsonObject ?: return null
         val device = data["device"]?.jsonObject ?: return null
         val deviceStatus = device["status"]?.jsonPrimitive?.content?.toIntOrNull() ?: 0
         val gene = device["gene"]?.jsonObject
         val geneStatus = gene?.get("status")?.jsonPrimitive?.content?.toIntOrNull() ?: 0
-        val user = data["user"]?.jsonObject
-        val userId = user?.get("id")?.jsonPrimitive?.content ?: ""
-        return DevStatusResult(deviceStatus = deviceStatus, geneStatus = geneStatus, userId = userId)
+        return DevStatusResult(deviceStatus = deviceStatus, geneStatus = geneStatus)
     }
 
-    suspend fun getDevHome(token: String, did: String, appType: String = "1,1"): DevHomeResult {
-        val response = client.get("${ApiConfig.baseUrl}/ui/app/dev/home/1") {
-            parameter("did", did)
-            parameter("apply", "6")
-            header("Authorization", token)
-            header("ApplicationType", appType)
-        }
-        val body = bodyJson(response)
-        if (body["code"]?.jsonPrimitive?.content?.toIntOrNull() != 0) return DevHomeResult()
-        val data = body["data"] as? JsonObject ?: return DevHomeResult()
-        val deviceShare = data["deviceShare"]?.jsonObject
-        val shareUserId = deviceShare?.get("sid")?.jsonPrimitive?.content ?: ""
-        return DevHomeResult(shareUserId = shareUserId)
-    }
-
-    private fun parseDevResult(raw: String): DevResult {
+    private fun parseDevResult(raw: String, reportError: Boolean = true): DevResult {
         val body = json.parseToJsonElement(raw).jsonObject
         checkSessionExpired(body)
         val code = body["code"]?.jsonPrimitive?.content?.toIntOrNull() ?: -1
         val msg = body["msg"]?.jsonPrimitive?.content ?: ""
+        if (reportError && code != 0 && code != -99) emitApiError(msg)
         return DevResult(code == 0, code, msg)
     }
 
@@ -280,7 +296,7 @@ class IlifeApi(private val client: HttpClient = createHttpClient()) {
             header("Authorization", token)
             header("ApplicationType", "1,5")
         }
-        return parseDevResult(response.bodyAsText())
+        return parseDevResult(response.bodyAsText(), reportError = false)
     }
 
     suspend fun signIn(token: String, uid: String, weekDay: Int, adId: String): DevResult {
@@ -291,14 +307,15 @@ class IlifeApi(private val client: HttpClient = createHttpClient()) {
             header("Authorization", token)
             header("ApplicationType", "1,5")
         }
-        return parseDevResult(response.bodyAsText())
+        return parseDevResult(response.bodyAsText(), reportError = false)
     }
 
-    suspend fun getScoreList(token: String, page: Int = 0, size: Int = 20): ScoreListResult {
+    suspend fun getScoreList(token: String, page: Int = 0, size: Int = 20, src: Int? = null): ScoreListResult {
         val response = client.get("${ApiConfig.baseUrl}/acc/score/score-lst") {
             parameter("page", page.toString())
             parameter("size", size.toString())
             parameter("hasCount", "1")
+            if (src != null) parameter("src", src.toString())
             header("Authorization", token)
             header("ApplicationType", "1,5")
         }
@@ -338,10 +355,7 @@ class IlifeApi(private val client: HttpClient = createHttpClient()) {
         val data = body["data"] as? JsonObject ?: return WalletOwnerResult()
         val aw = data["aw"] as? JsonObject
         val active = aw?.let { parseWallet(it) }
-        val activeEid = active?.eid ?: ""
-        val eps = (data["eps"] as? JsonArray)?.mapNotNull { it as? JsonObject }?.map { parseWallet(it) } ?: emptyList()
-        val charge = data["charge"]?.jsonPrimitive?.content?.toIntOrNull() ?: 1
-        val refund = data["refund"]?.jsonPrimitive?.content?.toIntOrNull() ?: 1
+        val eps = (data["eps"] as? JsonArray)?.filterIsInstance<JsonObject>()?.map { parseWallet(it) } ?: emptyList()
         val rfd = data["rfdProg"] as? JsonObject
         val refundProgress = rfd?.let {
             RefundProgress(
@@ -351,7 +365,7 @@ class IlifeApi(private val client: HttpClient = createHttpClient()) {
                 fail = it["fail"]?.jsonPrimitive?.content?.toIntOrNull()
             )
         }
-        return WalletOwnerResult(active, eps, activeEid, charge == 1, refund == 1, refundProgress)
+        return WalletOwnerResult(active, eps, refundProgress)
     }
 
     suspend fun getWalletDetail(token: String, id: String, eid: String = ""): WalletAccount? {
@@ -377,7 +391,6 @@ class IlifeApi(private val client: HttpClient = createHttpClient()) {
             eid = ep?.get("id")?.jsonPrimitive?.content ?: "",
             ownerId = owner?.get("id")?.jsonPrimitive?.content ?: "",
             name = ep?.get("name")?.jsonPrimitive?.content ?: obj["name"]?.jsonPrimitive?.content ?: "",
-            abbr = ep?.get("abbr")?.jsonPrimitive?.content ?: "",
             olCash = obj["olCash"]?.jsonPrimitive?.content?.toDoubleOrNull() ?: 0.0,
             olGift = obj["olGift"]?.jsonPrimitive?.content?.toDoubleOrNull() ?: 0.0,
             ofCash = obj["ofCash"]?.jsonPrimitive?.content?.toDoubleOrNull() ?: 0.0,
@@ -403,7 +416,6 @@ class IlifeApi(private val client: HttpClient = createHttpClient()) {
         val total = body["size"]?.jsonPrimitive?.content?.toIntOrNull() ?: data.size
         val records = data.mapNotNull { item ->
             val obj = item as? JsonObject ?: return@mapNotNull null
-            val bm = (obj["dev"] as? JsonObject)?.get("bm") as? JsonObject
             BillRecord(
                 id = obj["id"]?.jsonPrimitive?.content ?: "",
                 cata = obj["cata"]?.jsonPrimitive?.content?.toIntOrNull() ?: 0,
@@ -413,8 +425,7 @@ class IlifeApi(private val client: HttpClient = createHttpClient()) {
                 dir = obj["dir"]?.jsonPrimitive?.content?.toIntOrNull() ?: 1,
                 payment = obj["payment"]?.jsonPrimitive?.content?.toDoubleOrNull() ?: 0.0,
                 time = obj["utime"]?.jsonPrimitive?.content?.toLongOrNull()
-                    ?: obj["ctime"]?.jsonPrimitive?.content?.toLongOrNull() ?: 0L,
-                deviceType = bm?.get("dtype")?.jsonPrimitive?.content?.toIntOrNull() ?: 0
+                    ?: obj["ctime"]?.jsonPrimitive?.content?.toLongOrNull() ?: 0L
             )
         }
         return BillListResult(records, total)
@@ -444,8 +455,7 @@ class IlifeApi(private val client: HttpClient = createHttpClient()) {
                 id = id,
                 name = obj["name"]?.jsonPrimitive?.content ?: "充值",
                 price = obj["curPrice"]?.jsonPrimitive?.content?.toDoubleOrNull() ?: 0.0,
-                originalPrice = obj["ogiPrice"]?.jsonPrimitive?.content?.toDoubleOrNull() ?: 0.0,
-                description = obj["desc"]?.jsonPrimitive?.content ?: ""
+                originalPrice = obj["ogiPrice"]?.jsonPrimitive?.content?.toDoubleOrNull() ?: 0.0
             )
         }.distinctBy { "${it.name}|${it.price}|${it.originalPrice}" }
     }
@@ -461,7 +471,10 @@ class IlifeApi(private val client: HttpClient = createHttpClient()) {
         }
         val body = json.parseToJsonElement(response.bodyAsText()).jsonObject
         checkSessionExpired(body)
-        if (body["code"]?.jsonPrimitive?.content?.toIntOrNull() != 0) return null
+        if (body["code"]?.jsonPrimitive?.content?.toIntOrNull() != 0) {
+            emitApiError(body["msg"]?.jsonPrimitive?.content)
+            return null
+        }
         return body["data"]?.jsonPrimitive?.content?.takeIf { it.isNotEmpty() && it != "null" }
     }
 
@@ -501,11 +514,11 @@ class IlifeApi(private val client: HttpClient = createHttpClient()) {
 }
 
 data class LoginResult(val success: Boolean, val token: String = "", val uid: String = "", val eid: String = "", val error: String = "")
-data class AccountInfoDto(val img: String = "", val name: String = "", val pn: String = "")
-data class DeviceDto(val id: String, val name: String, val status: Int = 0, val geneStatus: Int = 0, val ownerId: String = "")
+data class AccountInfoDto(val id: String = "", val img: String = "", val name: String = "", val pn: String = "")
+data class TokenProbe(val appValid: Boolean, val mainValid: Boolean, val uid: String = "")
+data class DeviceDto(val id: String, val name: String, val status: Int = 0, val geneStatus: Int = 0)
 data class MasterResult(val accountId: String = "", val devices: List<DeviceDto> = emptyList())
-data class DevHomeResult(val shareUserId: String = "")
-data class DevStatusResult(val deviceStatus: Int, val geneStatus: Int, val userId: String = "")
+data class DevStatusResult(val deviceStatus: Int, val geneStatus: Int)
 data class DevResult(val success: Boolean, val code: Int, val message: String)
 data class MissionDto(val adId: String, val name: String, val score: Int, val limit: Int, val dailyCompleted: Int = 0, val isDailySignin: Boolean = false)
 data class MissionListResult(val missions: List<MissionDto>, val validScore: Int? = null, val weekMask: Int = 0, val dailyAdId: String = "", val dailyScore: Int = 5, val totalScore: Int? = null)
@@ -514,9 +527,6 @@ data class ScoreListResult(val records: List<ScoreDto>, val total: Int)
 data class WalletOwnerResult(
     val active: WalletAccount? = null,
     val wallets: List<WalletAccount> = emptyList(),
-    val activeEid: String = "",
-    val chargeEnabled: Boolean = true,
-    val refundEnabled: Boolean = true,
     val refundProgress: RefundProgress? = null
 )
 data class BillListResult(val records: List<BillRecord>, val total: Int)

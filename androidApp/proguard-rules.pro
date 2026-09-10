@@ -1,7 +1,7 @@
 # Ktor
 # Keep ServiceLoader implementations (OkHttp engine discovery + kotlinx-json provider).
--keep class io.ktor.client.engine.okhttp.OkHttpEngineContainer { *; }
--keep class io.ktor.serialization.kotlinx.json.KotlinxSerializationJsonExtensionProvider { *; }
+-keep class io.ktor.client.engine.okhttp.*EngineContainer { *; }
+-keep class io.ktor.serialization.kotlinx.json.*ExtensionProvider { *; }
 -keepclassmembers class io.ktor.** { volatile <fields>; }
 -dontwarn io.ktor.**
 
