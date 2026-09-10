@@ -30,6 +30,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import top.yukonga.miuix.kmp.basic.BasicComponent
@@ -73,7 +74,8 @@ fun MePage(
     onLoginClick: (isAlipay: Boolean) -> Unit = {},
     onScoreClick: () -> Unit = {},
     onAccountClick: () -> Unit = {},
-    onBillClick: () -> Unit = {}
+    onBillClick: () -> Unit = {},
+    onLicenseClick: () -> Unit = {}
 ) {
     val scrollBehavior = MiuixScrollBehavior()
     val blurBackdrop = rememberAppBlurBackdrop(viewModel.state.appBlur)
@@ -102,7 +104,7 @@ fun MePage(
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             AccountSection(viewModel, onLoginClick, onScoreClick, onAccountClick, onBillClick)
-            SettingsSection(viewModel)
+            SettingsSection(viewModel, onLicenseClick)
             Spacer(modifier = Modifier.height(16.dp))
         }
     }
@@ -278,8 +280,9 @@ private fun AccountSection(
 }
 
 @Composable
-private fun SettingsSection(viewModel: AppViewModel) {
+private fun SettingsSection(viewModel: AppViewModel, onLicenseClick: () -> Unit) {
     val state = viewModel.state
+    val uriHandler = LocalUriHandler.current
     val themeOptions = listOf("跟随系统", "浅色", "深色")
     var themeSelectedIndex by remember {
         mutableIntStateOf(
@@ -308,26 +311,6 @@ private fun SettingsSection(viewModel: AppViewModel) {
                     viewModel.setThemeMode(mode)
                 }
             )
-            BasicComponent(
-                title = "动态取色",
-                summary = "基于系统壁纸颜色生成配色方案",
-                endActions = {
-                    Switch(
-                        checked = state.dynamicColor,
-                        onCheckedChange = { viewModel.setDynamicColor(it) }
-                    )
-                }
-            )
-            BasicComponent(
-                title = "悬浮底栏",
-                summary = "切换悬浮式底部导航栏",
-                endActions = {
-                    Switch(
-                        checked = state.floatingNav,
-                        onCheckedChange = { viewModel.setFloatingNav(it) }
-                    )
-                }
-            )
             if (isRuntimeShaderSupported()) {
                 BasicComponent(
                     title = "模糊效果",
@@ -341,6 +324,16 @@ private fun SettingsSection(viewModel: AppViewModel) {
                 )
             }
             BasicComponent(
+                title = "动态取色",
+                summary = "基于系统壁纸颜色生成配色方案",
+                endActions = {
+                    Switch(
+                        checked = state.dynamicColor,
+                        onCheckedChange = { viewModel.setDynamicColor(it) }
+                    )
+                }
+            )
+            BasicComponent(
                 title = "预测性返回动画",
                 summary = "返回滑动前提前预览即将跳转至的界面",
                 endActions = {
@@ -351,8 +344,38 @@ private fun SettingsSection(viewModel: AppViewModel) {
                 }
             )
             BasicComponent(
+                title = "悬浮底栏",
+                summary = "切换悬浮式底部导航栏",
+                endActions = {
+                    Switch(
+                        checked = state.floatingNav,
+                        onCheckedChange = { viewModel.setFloatingNav(it) }
+                    )
+                }
+            )
+        }
+    }
+    SmallTitle(text = "关于", insideMargin = PaddingValues(12.dp, 8.dp))
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column {
+            BasicComponent(
                 title = "版本",
                 summary = getAppVersion()
+            )
+            BasicComponent(
+                title = "查看源代码",
+                summary = "在 GitHub 上查看源代码",
+                onClick = { uriHandler.openUri("https://github.com/Jursin/ilife798") }
+            )
+            BasicComponent(
+                title = "开放源代码许可",
+                summary = "查看应用所使用的第三方开源库及其许可证信息",
+                onClick = onLicenseClick
+            )
+            BasicComponent(
+                title = "赞助支持",
+                summary = "在爱发电赞助我",
+                onClick = { uriHandler.openUri("https://afdian.com/a/jursin") }
             )
         }
     }

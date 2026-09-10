@@ -50,6 +50,7 @@ import com.github.ilife798.ui.page.score.ScorePage
 import com.github.ilife798.ui.page.account.AccountPage
 import com.github.ilife798.ui.page.bill.MyBillPage
 import com.github.ilife798.ui.page.device.DeviceAddPage
+import com.github.ilife798.ui.page.about.OpenSourceLicensePage
 
 private val tabs = listOf(
     NavigationItem("主页", MiuixIcons.Home),
@@ -207,7 +208,8 @@ fun MainScaffold(viewModel: AppViewModel) {
                                     onLoginClick = { isAlipay -> navigate(Page.Login(isAlipay = isAlipay)) },
                                     onScoreClick = { navigate(Page.Score) },
                                     onAccountClick = { navigate(Page.Account) },
-                                    onBillClick = { navigate(Page.Bill) }
+                                    onBillClick = { navigate(Page.Bill) },
+                                    onLicenseClick = { navigate(Page.Licenses) }
                                 )
                             }
                         }
@@ -259,6 +261,14 @@ fun MainScaffold(viewModel: AppViewModel) {
             entry<Page.DeviceAdd> {
                 NavEntry(interceptPredictiveBack, onBack) {
                     DeviceAddPage(
+                        viewModel = viewModel,
+                        onBack = onBack
+                    )
+                }
+            }
+            entry<Page.Licenses> {
+                NavEntry(interceptPredictiveBack, onBack) {
+                    OpenSourceLicensePage(
                         viewModel = viewModel,
                         onBack = onBack
                     )

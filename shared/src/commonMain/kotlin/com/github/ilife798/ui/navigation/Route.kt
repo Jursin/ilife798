@@ -11,4 +11,5 @@ sealed class Page : NavKey {
     @Serializable data object Account : Page()
     @Serializable data object Bill : Page()
     @Serializable data object DeviceAdd : Page()
+    @Serializable data object Licenses : Page()
 }

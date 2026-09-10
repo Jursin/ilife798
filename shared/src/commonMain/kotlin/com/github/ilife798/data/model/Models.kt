@@ -130,7 +130,7 @@ data class AppState(
     val billRecords: List<BillRecord> = emptyList(),
     val taskCompleted: Boolean = false,
     val taskLogs: List<String> = emptyList(),
-    val dynamicColor: Boolean = false,
+    val dynamicColor: Boolean = true,
     val floatingNav: Boolean = false,
     val appBlur: Boolean = true,
     val predictiveBackEnabled: Boolean = true,

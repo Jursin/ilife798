@@ -6,6 +6,19 @@ plugins {
     alias(libs.plugins.composeMultiplatform)
     alias(libs.plugins.composeCompiler)
     alias(libs.plugins.kotlinSerialization)
+    alias(libs.plugins.aboutLibraries)
+}
+
+aboutLibraries {
+    export {
+        outputFile = file("src/commonMain/composeResources/files/aboutlibraries.json")
+        prettyPrint = true
+    }
+}
+
+compose.resources {
+    publicResClass = true
+    packageOfResClass = "com.github.ilife798.shared.resources"
 }
 
 kotlin {
@@ -54,6 +67,7 @@ kotlin {
             implementation(libs.ktor.darwin)
         }
         commonMain.dependencies {
+            implementation(compose.components.resources)
             implementation(libs.compose.runtime)
             implementation(libs.compose.foundation)
             implementation(libs.compose.ui)
@@ -70,9 +84,21 @@ kotlin {
             implementation(libs.ktorContentNegotiation)
             implementation(libs.ktorSerializationJson)
             implementation(libs.kotlinxSerializationJson)
+            implementation(libs.aboutlibraries.compose.core)
         }
         commonTest.dependencies {
             implementation(libs.kotlin.test)
         }
     }
+}
+
+// 依赖变化时自动重新生成开源许可清单，供 Compose Resources 读取
+tasks.matching {
+    it.name in setOf(
+        "prepareComposeResourcesTaskForCommonMain",
+        "copyNonXmlValueResourcesForCommonMain",
+        "convertXmlValueResourcesForCommonMain"
+    )
+}.configureEach {
+    dependsOn("exportLibraryDefinitions")
 }
