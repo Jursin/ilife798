@@ -27,6 +27,7 @@ data class Device(
 @Serializable
 data class PointsInfo(
     val available: Int? = null,
+    val total: Int? = null,
     val todaySpent: Double? = null
 )
 
@@ -53,6 +54,67 @@ data class ScoreRecord(
     val time: String = ""
 )
 
+@Serializable
+data class WalletAccount(
+    val id: String = "",
+    val eid: String = "",
+    val ownerId: String = "",
+    val name: String = "",
+    val abbr: String = "",
+    val olCash: Double = 0.0,
+    val olGift: Double = 0.0,
+    val ofCash: Double = 0.0,
+    val ofGift: Double = 0.0,
+    val total: Double = 0.0,
+    val auth: Boolean = false,
+    val chargeEnabled: Boolean = true,
+    val refundEnabled: Boolean = true
+) {
+    val cashBalance: Double get() = olCash + ofCash
+    val refundable: Double get() = if (auth) olCash + ofCash else olCash
+}
+
+@Serializable
+data class RechargeProduct(
+    val id: String = "",
+    val name: String = "",
+    val price: Double = 0.0,
+    val originalPrice: Double = 0.0,
+    val description: String = ""
+) {
+    val hasDiscount: Boolean get() = originalPrice > price
+}
+
+@Serializable
+data class RefundProgress(
+    val ctime: Long = -1L,
+    val count: Int = 0,
+    val total: Double = 0.0,
+    val fail: Int? = null
+) {
+    val active: Boolean get() = ctime != -1L
+}
+
+@Serializable
+data class SpendingStats(
+    val today: Double = 0.0,
+    val yesterday: Double = 0.0,
+    val monthAverage: Double = 0.0
+)
+
+@Serializable
+data class BillRecord(
+    val id: String = "",
+    val cata: Int = 0,
+    val type: Int = 0,
+    val msg: String = "",
+    val status: Int = 0,
+    val dir: Int = 1,
+    val payment: Double = 0.0,
+    val time: Long = 0L,
+    val deviceType: Int = 0
+)
+
 enum class ThemeMode { Light, Dark, System }
 
 @Serializable
@@ -69,6 +131,9 @@ data class AppState(
     val points: PointsInfo = PointsInfo(),
     val taskRecords: List<TaskRecord> = emptyList(),
     val scoreRecords: List<ScoreRecord> = emptyList(),
+    val wallets: List<WalletAccount> = emptyList(),
+    val activeWalletId: String = "",
+    val billRecords: List<BillRecord> = emptyList(),
     val taskCompleted: Boolean = false,
     val taskLogs: List<String> = emptyList(),
     val dynamicColor: Boolean = false,

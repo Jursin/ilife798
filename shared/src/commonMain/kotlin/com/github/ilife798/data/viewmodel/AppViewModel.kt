@@ -7,23 +7,34 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.github.ilife798.data.api.DevStatusResult
+import com.github.ilife798.data.api.DevResult
 import com.github.ilife798.data.api.IlifeApi
+import com.github.ilife798.data.api.ScoreDto
 import com.github.ilife798.data.model.Account
 import com.github.ilife798.data.model.AccountInfo
 import com.github.ilife798.data.model.AppState
+import com.github.ilife798.data.model.BillRecord
 import com.github.ilife798.data.model.Device
 import com.github.ilife798.data.model.MissionInfo
 import com.github.ilife798.data.model.PointsInfo
+import com.github.ilife798.data.model.RechargeProduct
+import com.github.ilife798.data.model.RefundProgress
 import com.github.ilife798.data.model.ScoreRecord
+import com.github.ilife798.data.model.SpendingStats
 import com.github.ilife798.data.model.TaskRecord
 import com.github.ilife798.data.model.ThemeMode
+import com.github.ilife798.data.model.WalletAccount
 import com.github.ilife798.toImageBitmap
 import com.github.ilife798.AppStorage
 import com.github.ilife798.StorageKeys
+import com.github.ilife798.pay.AlipayPayResult
+import com.github.ilife798.pay.payWithAlipay
 import com.github.ilife798.showToast
 import com.github.ilife798.util.currentTimeMillis
 import com.github.ilife798.util.currentTimeFormatted
+import com.github.ilife798.util.formatTimestamp
 import com.github.ilife798.util.getDayOfWeek
+import com.github.ilife798.util.getTodayStart
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -36,6 +47,10 @@ import kotlin.time.Duration.Companion.seconds
 
 private const val PAY_TYPE_WALLET = 91
 private const val PAY_TYPE_ALIPAY = 21
+private const val SCORE_PAGE_SIZE = 20
+private const val BILL_PAGE_SIZE = 20
+private const val BILL_STATUS = 3
+private const val SPENDING_MAX_PAGES = 10
 
 class AppViewModel : ViewModel() {
 
@@ -46,6 +61,8 @@ class AppViewModel : ViewModel() {
     private var lastScoreLoadTime = 0L
     private var lastAccountLoadTime = 0L
     private var lastDeviceLoadTime = 0L
+    private var lastBillLoadTime = 0L
+    private var lastSpendingLoadTime = 0L
 
     var state by mutableStateOf(AppState())
         private set
@@ -121,6 +138,26 @@ class AppViewModel : ViewModel() {
             storage.saveString(StorageKeys.TOKEN, account.token)
             storage.saveString(StorageKeys.APP_TOKEN, account.appToken)
         } catch (_: Exception) {}
+    }
+
+    // 账号信息页手动填写凭据（如导入官方 token/uid）
+    fun updateAccountField(field: String, value: String) {
+        val acc = state.account
+        val updated = when (field) {
+            "appToken" -> acc.copy(appToken = value, isLoggedIn = true)
+            "token" -> acc.copy(token = value, isLoggedIn = true, pointsLoginDone = true)
+            else -> return
+        }
+        state = state.copy(account = updated)
+        saveAccount()
+        if (field == "appToken" || field == "token") {
+            lastDeviceLoadTime = 0L
+            lastScoreLoadTime = 0L
+            lastAccountLoadTime = 0L
+            loadDeviceInfo()
+            loadAccountInfo()
+            loadScoreInfo()
+        }
     }
 
     // --- Captcha ---
@@ -230,6 +267,9 @@ class AppViewModel : ViewModel() {
             points = PointsInfo(),
             accountInfo = AccountInfo(),
             scoreRecords = emptyList(),
+            wallets = emptyList(),
+            activeWalletId = "",
+            billRecords = emptyList(),
             taskRecords = emptyList(),
             taskLogs = emptyList(),
             taskCompleted = false
@@ -259,6 +299,13 @@ class AppViewModel : ViewModel() {
         viewModelScope.launch {
             try {
                 val master = api.getMasterDevices(token)
+                // 账号已切换/退出登录，丢弃过期结果
+                if (state.account.token != token && state.account.appToken != token) return@launch
+                // 登录态失效：主接口不再返回账户数据
+                if (master.accountId.isEmpty() && master.devices.isEmpty()) {
+                    handleSessionExpired()
+                    return@launch
+                }
                 val devices = master.devices
                 val updatedDevices = devices.map { dto ->
                     val realStatus = try { api.getDevStatus(token, dto.id, appType) } catch (_: Exception) { null }
@@ -290,11 +337,14 @@ class AppViewModel : ViewModel() {
         viewModelScope.launch {
             try {
                 val info = api.getAccountInfo(token)
-                if (info != null) {
-                    val newInfo = AccountInfo(img = info.img, name = info.name, pn = info.pn)
-                    if (state.accountInfo != newInfo) {
-                        state = state.copy(accountInfo = newInfo)
-                    }
+                if (state.account.appToken != token && state.account.token != token) return@launch
+                if (info == null) {
+                    handleSessionExpired()
+                    return@launch
+                }
+                val newInfo = AccountInfo(img = info.img, name = info.name, pn = info.pn)
+                if (state.accountInfo != newInfo) {
+                    state = state.copy(accountInfo = newInfo)
                 }
             } catch (_: Exception) {}
         }
@@ -387,38 +437,336 @@ class AppViewModel : ViewModel() {
     var missions by mutableStateOf<List<MissionInfo>>(emptyList())
         private set
 
+    var scoreLoadingMore by mutableStateOf(false)
+        private set
+    var scoreHasMore by mutableStateOf(false)
+        private set
+    private var scorePage = 0
+    private var scoreLoadToken = ""
+
+    private fun toScoreRecord(dto: ScoreDto) = ScoreRecord(score = dto.score, name = dto.name, time = dto.time)
+
+    private fun loadScoreFirstPage(token: String) {
+        viewModelScope.launch {
+            try {
+                val result = api.getScoreList(token, page = 0, size = SCORE_PAGE_SIZE)
+                if (state.account.token != token) return@launch
+                scoreLoadToken = token
+                scorePage = 0
+                scoreHasMore = result.total > result.records.size
+                state = state.copy(scoreRecords = result.records.map(::toScoreRecord))
+            } catch (_: Exception) {}
+        }
+    }
+
     fun loadScoreInfo() {
         val token = state.account.token
         if (token.isEmpty()) return
         val now = currentTimeMillis()
         if (now - lastScoreLoadTime < 5000) return
         lastScoreLoadTime = now
-        viewModelScope.launch {
-            try {
-                val scores = api.getScoreList(token)
-                if (state.account.token != token) return@launch
-                val totalScore = scores.sumOf { it.score }
-                state = state.copy(
-                    points = PointsInfo(available = totalScore),
-                    scoreRecords = scores.map { ScoreRecord(score = it.score, name = it.name, time = it.time) }
-                )
-            } catch (_: Exception) {}
-        }
+        loadScoreFirstPage(token)
+        loadScoreSummary()
     }
 
     fun loadScoreInfoNoCooldown() {
         val token = state.account.token
         if (token.isEmpty()) return
+        loadScoreFirstPage(token)
+    }
+
+    fun loadMoreScores() {
+        val token = state.account.token
+        if (token.isEmpty() || scoreLoadingMore || !scoreHasMore || scoreLoadToken != token) return
+        scoreLoadingMore = true
         viewModelScope.launch {
             try {
-                val scores = api.getScoreList(token)
+                val nextPage = scorePage + 1
+                val result = api.getScoreList(token, page = nextPage, size = SCORE_PAGE_SIZE)
                 if (state.account.token != token) return@launch
-                val totalScore = scores.sumOf { it.score }
+                scorePage = nextPage
+                val seen = state.scoreRecords.map { "${it.time}|${it.score}|${it.name}" }.toMutableSet()
+                val appended = result.records.map(::toScoreRecord)
+                    .filter { seen.add("${it.time}|${it.score}|${it.name}") }
+                state = state.copy(scoreRecords = state.scoreRecords + appended)
+                scoreHasMore = (scorePage + 1) * SCORE_PAGE_SIZE < result.total
+            } catch (_: Exception) {
+            } finally {
+                scoreLoadingMore = false
+            }
+        }
+    }
+
+    // 积分概览
+    fun loadScoreSummary() {
+        val token = state.account.token
+        if (token.isEmpty()) return
+        viewModelScope.launch {
+            try {
+                val result = api.getMissionList(token)
+                if (state.account.token != token) return@launch
                 state = state.copy(
-                    points = PointsInfo(available = totalScore),
-                    scoreRecords = scores.map { ScoreRecord(score = it.score, name = it.name, time = it.time) }
+                    points = state.points.copy(
+                        available = result.validScore ?: state.points.available,
+                        total = result.totalScore ?: state.points.total
+                    )
                 )
             } catch (_: Exception) {}
+        }
+    }
+
+    fun refreshScorePage() {
+        loadScoreSummary()
+        loadScoreInfoNoCooldown()
+    }
+
+    // --- Wallet & Bills ---
+    var billLoadingMore by mutableStateOf(false)
+        private set
+    var billHasMore by mutableStateOf(false)
+        private set
+    private var billPage = 0
+    private var billLoadToken = ""
+
+    var refundProgress by mutableStateOf<RefundProgress?>(null)
+        private set
+
+    private fun walletToken(): String = state.account.appToken.ifEmpty { state.account.token }
+
+    fun loadWallet() {
+        val token = walletToken()
+        if (token.isEmpty()) return
+        viewModelScope.launch {
+            try {
+                val result = api.getWalletOwner(token, all = true)
+                if (walletToken() != token) return@launch
+                val active = result.active
+                val merged = if (active != null && result.wallets.none { it.id == active.id }) {
+                    listOf(active) + result.wallets
+                } else {
+                    result.wallets
+                }
+                val wallets = merged.distinctBy { it.id.ifEmpty { it.eid } }
+                val activeId = active?.id?.takeIf { it.isNotEmpty() }
+                    ?: wallets.firstOrNull()?.id ?: ""
+                state = state.copy(wallets = wallets, activeWalletId = activeId)
+                refundProgress = result.refundProgress
+                wallets.firstOrNull { it.id == activeId }?.let { loadWalletDetail(it) }
+            } catch (_: Exception) {}
+        }
+    }
+
+    private fun loadWalletDetail(wallet: WalletAccount) {
+        val token = walletToken()
+        if (token.isEmpty()) return
+        viewModelScope.launch {
+            try {
+                val detail = api.getWalletDetail(token, wallet.id, wallet.eid) ?: return@launch
+                if (walletToken() != token) return@launch
+                state = state.copy(
+                    wallets = state.wallets.map {
+                        if (it.id == wallet.id) {
+                            it.copy(
+                                name = detail.name.ifEmpty { it.name },
+                                total = detail.total,
+                                olCash = detail.olCash,
+                                olGift = detail.olGift,
+                                ofCash = detail.ofCash,
+                                ofGift = detail.ofGift,
+                                auth = detail.auth
+                            )
+                        } else it
+                    }
+                )
+            } catch (_: Exception) {}
+        }
+    }
+
+    fun selectWallet(id: String) {
+        if (state.activeWalletId == id) return
+        rechargeProducts = emptyList()
+        state = state.copy(activeWalletId = id)
+        state.wallets.firstOrNull { it.id == id }?.let { loadWalletDetail(it) }
+    }
+
+    private fun loadBillFirstPage(token: String) {
+        viewModelScope.launch {
+            try {
+                val result = api.getBillList(token, page = 0, size = BILL_PAGE_SIZE, status = BILL_STATUS)
+                if (walletToken() != token) return@launch
+                billLoadToken = token
+                billPage = 0
+                billHasMore = result.total > result.records.size
+                state = state.copy(billRecords = result.records)
+            } catch (_: Exception) {}
+        }
+    }
+
+    fun loadBills() {
+        val token = walletToken()
+        if (token.isEmpty()) return
+        val now = currentTimeMillis()
+        if (now - lastBillLoadTime < 5000) return
+        lastBillLoadTime = now
+        loadBillFirstPage(token)
+    }
+
+    fun loadBillsNoCooldown() {
+        val token = walletToken()
+        if (token.isEmpty()) return
+        loadBillFirstPage(token)
+    }
+
+    fun loadMoreBills() {
+        val token = walletToken()
+        if (token.isEmpty() || billLoadingMore || !billHasMore || billLoadToken != token) return
+        billLoadingMore = true
+        viewModelScope.launch {
+            try {
+                val nextPage = billPage + 1
+                val result = api.getBillList(token, page = nextPage, size = BILL_PAGE_SIZE, status = BILL_STATUS)
+                if (walletToken() != token) return@launch
+                billPage = nextPage
+                val seen = state.billRecords.map { it.id }.toMutableSet()
+                val appended = result.records.filter { it.id.isEmpty() || seen.add(it.id) }
+                state = state.copy(billRecords = state.billRecords + appended)
+                billHasMore = (billPage + 1) * BILL_PAGE_SIZE < result.total
+            } catch (_: Exception) {
+            } finally {
+                billLoadingMore = false
+            }
+        }
+    }
+
+    fun refreshBillPage() {
+        loadWallet()
+        loadBillsNoCooldown()
+    }
+
+    // --- Spending stats (home) ---
+    var spendingStats by mutableStateOf(SpendingStats())
+        private set
+
+    fun loadSpendingStats() {
+        val token = walletToken()
+        if (token.isEmpty()) return
+        val now = currentTimeMillis()
+        if (now - lastSpendingLoadTime < 5000) return
+        lastSpendingLoadTime = now
+        viewModelScope.launch {
+            try {
+                val monthPrefix = currentTimeFormatted("yyyy-MM")
+                val todayKey = currentTimeFormatted("yyyy-MM-dd")
+                val yesterdayKey = formatTimestamp(getTodayStart(now) - 86_400_000L, "yyyy-MM-dd")
+                var today = 0.0
+                var yesterday = 0.0
+                val monthDaySums = mutableMapOf<String, Double>()
+                var page = 0
+                while (page < SPENDING_MAX_PAGES) {
+                    val result = api.getBillList(token, page = page, size = BILL_PAGE_SIZE, status = BILL_STATUS)
+                    if (walletToken() != token) return@launch
+                    if (result.records.isEmpty()) break
+                    for (record in result.records) {
+                        if (record.dir != 1 || record.payment <= 0.0 || record.cata == 1) continue
+                        val key = formatTimestamp(record.time, "yyyy-MM-dd")
+                        when (key) {
+                            todayKey -> today += record.payment
+                            yesterdayKey -> yesterday += record.payment
+                        }
+                        if (key.startsWith(monthPrefix)) {
+                            monthDaySums[key] = (monthDaySums[key] ?: 0.0) + record.payment
+                        }
+                    }
+                    val oldest = result.records.minOfOrNull { it.time } ?: break
+                    if (formatTimestamp(oldest, "yyyy-MM") < monthPrefix) break
+                    if (result.records.size < BILL_PAGE_SIZE) break
+                    page++
+                }
+                val spendingDays = monthDaySums.count { it.value > 0.0 }
+                val monthTotal = monthDaySums.values.sum()
+                spendingStats = SpendingStats(
+                    today = today,
+                    yesterday = yesterday,
+                    monthAverage = if (spendingDays > 0) monthTotal / spendingDays else 0.0
+                )
+            } catch (_: Exception) {}
+        }
+    }
+
+    // --- Recharge ---
+    var rechargeProducts by mutableStateOf<List<RechargeProduct>>(emptyList())
+        private set
+    var rechargeLoading by mutableStateOf(false)
+        private set
+    var rechargePaying by mutableStateOf(false)
+        private set
+
+    fun loadRechargeProducts() {
+        val token = walletToken()
+        val wallet = state.wallets.firstOrNull { it.id == state.activeWalletId }
+        if (token.isEmpty() || wallet == null || wallet.eid.isEmpty()) return
+        rechargeLoading = true
+        viewModelScope.launch {
+            try {
+                val products = api.getRechargeProducts(token, wallet.eid)
+                if (walletToken() != token || state.activeWalletId != wallet.id) return@launch
+                rechargeProducts = products
+            } catch (_: Exception) {
+            } finally {
+                rechargeLoading = false
+            }
+        }
+    }
+
+    suspend fun submitRecharge(product: RechargeProduct): AlipayPayResult {
+        val token = walletToken()
+        val wallet = state.wallets.firstOrNull { it.id == state.activeWalletId }
+        if (token.isEmpty() || wallet == null || wallet.eid.isEmpty() || wallet.ownerId.isEmpty()) {
+            return AlipayPayResult(false, "", "钱包信息缺失，请重新进入")
+        }
+        if (rechargePaying) return AlipayPayResult(false, "", "正在支付中，请稍候")
+        rechargePaying = true
+        return try {
+            val orderId = api.createRechargeOrder(token, wallet.eid, wallet.ownerId, product.id)
+                ?: return AlipayPayResult(false, "", "创建充值订单失败")
+            val orderInfo = api.prepayAlipay(token, orderId)
+                ?: return AlipayPayResult(false, "", "获取支付参数失败")
+            val result = payWithAlipay(orderInfo)
+            if (result.success) {
+                loadWallet()
+                loadBillsNoCooldown()
+            }
+            result
+        } catch (e: Exception) {
+            AlipayPayResult(false, "", "支付失败：${e.message}")
+        } finally {
+            rechargePaying = false
+        }
+    }
+
+    // --- Refund ---
+    var refundSubmitting by mutableStateOf(false)
+        private set
+
+    suspend fun submitRefund(): DevResult {
+        val token = walletToken()
+        val wallet = state.wallets.firstOrNull { it.id == state.activeWalletId }
+            ?: return DevResult(false, -1, "钱包信息缺失，请重新进入")
+        if (wallet.eid.isEmpty()) return DevResult(false, -1, "钱包信息缺失，请重新进入")
+        if (wallet.refundable <= 0.0) return DevResult(false, -1, "可退金额为0，无法退款")
+        if (refundSubmitting) return DevResult(false, -1, "正在提交退款，请稍候")
+        refundSubmitting = true
+        return try {
+            val result = api.refundWallet(token, wallet.eid)
+            if (result.success) {
+                loadWallet()
+                loadBillsNoCooldown()
+            }
+            result
+        } catch (e: Exception) {
+            DevResult(false, -1, "退款失败：${e.message}")
+        } finally {
+            refundSubmitting = false
         }
     }
 
@@ -434,7 +782,7 @@ class AppViewModel : ViewModel() {
 
                 // Count today's completions from score-lst
                 val todayStart = com.github.ilife798.util.getTodayStart(currentTimeMillis())
-                val scores = try { api.getScoreList(token) } catch (_: Exception) { emptyList() }
+                val scores = try { api.getScoreList(token).records } catch (_: Exception) { emptyList() }
                 val todayDoneFromScore = mutableMapOf<String, Int>()
                 for (score in scores) {
                     if (score.score > 0 && score.adId.isNotEmpty()) {
@@ -468,7 +816,10 @@ class AppViewModel : ViewModel() {
                 }
                 state = state.copy(
                     weekMask = result.weekMask,
-                    points = if (result.validScore != null) PointsInfo(available = result.validScore) else state.points
+                    points = state.points.copy(
+                        available = result.validScore ?: state.points.available,
+                        total = result.totalScore ?: state.points.total
+                    )
                 )
             } catch (_: Exception) {}
         }
@@ -492,13 +843,18 @@ class AppViewModel : ViewModel() {
             try {
                 addTaskLog("正在加载任务列表...")
                 val result = api.getMissionList(token)
-                if (result.validScore != null) {
-                    state = state.copy(points = PointsInfo(available = result.validScore))
+                if (result.validScore != null || result.totalScore != null) {
+                    state = state.copy(
+                        points = state.points.copy(
+                            available = result.validScore ?: state.points.available,
+                            total = result.totalScore ?: state.points.total
+                        )
+                    )
                 }
 
                 // Count today's completions from score-lst
                 val todayStart = com.github.ilife798.util.getTodayStart(currentTimeMillis())
-                val scores = try { api.getScoreList(token) } catch (_: Exception) { emptyList() }
+                val scores = try { api.getScoreList(token).records } catch (_: Exception) { emptyList() }
                 val todayDoneFromScore = mutableMapOf<String, Int>()
                 for (score in scores) {
                     if (score.score > 0 && score.adId.isNotEmpty()) {
@@ -669,7 +1025,9 @@ class AppViewModel : ViewModel() {
         lastDeviceLoadTime = 0L
         lastScoreLoadTime = 0L
         lastMissionsLoadTime = 0L
+        lastAccountLoadTime = 0L
         loadDeviceInfo()
+        loadAccountInfo()
         loadScoreInfo()
     }
 }

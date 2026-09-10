@@ -1,6 +1,7 @@
 package com.github.ilife798.ui.page.me
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -13,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
@@ -62,13 +64,16 @@ import com.github.ilife798.ui.theme.WindowBlurEffect
 import com.github.ilife798.ui.theme.appBarBlur
 import com.github.ilife798.ui.theme.blurAppBarColor
 import com.github.ilife798.ui.theme.rememberAppBlurBackdrop
+import top.yukonga.miuix.kmp.icon.extended.Create
+import top.yukonga.miuix.kmp.icon.extended.Notes
 
 @Composable
 fun MePage(
     viewModel: AppViewModel,
     onLoginClick: (isAlipay: Boolean) -> Unit = {},
     onScoreClick: () -> Unit = {},
-    onAccountClick: () -> Unit = {}
+    onAccountClick: () -> Unit = {},
+    onBillClick: () -> Unit = {}
 ) {
     val scrollBehavior = MiuixScrollBehavior()
     val blurBackdrop = rememberAppBlurBackdrop(viewModel.state.appBlur)
@@ -96,7 +101,7 @@ fun MePage(
                 .padding(top = 4.dp, bottom = 80.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            AccountSection(viewModel, onLoginClick, onScoreClick, onAccountClick)
+            AccountSection(viewModel, onLoginClick, onScoreClick, onAccountClick, onBillClick)
             SettingsSection(viewModel)
             Spacer(modifier = Modifier.height(16.dp))
         }
@@ -108,7 +113,8 @@ private fun AccountSection(
     viewModel: AppViewModel,
     onLoginClick: (isAlipay: Boolean) -> Unit,
     onScoreClick: () -> Unit,
-    onAccountClick: () -> Unit
+    onAccountClick: () -> Unit,
+    onBillClick: () -> Unit
 ) {
     val account = viewModel.state.account
     val accountInfo = viewModel.state.accountInfo
@@ -126,6 +132,7 @@ private fun AccountSection(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+                .clickable { onAccountClick() }
                 .padding(16.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically
@@ -207,10 +214,15 @@ private fun AccountSection(
             ) {
                 Button(
                     modifier = Modifier.weight(1f),
-                    onClick = onAccountClick,
+                    onClick = onBillClick,
                     colors = primaryButtonColors(dynamicColor)
                 ) {
-                    Text(text = "账号管理")
+                    Icon(
+                        imageVector = MiuixIcons.Notes,
+                        contentDescription = "账单"
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(text = "我的账单")
                 }
                 Button(
                     modifier = Modifier.weight(1f),
@@ -219,7 +231,12 @@ private fun AccountSection(
                     },
                     colors = primaryButtonColors(dynamicColor)
                 ) {
-                    Text(text = if (hasPoints) "积分流水" else "积分登录")
+                    Icon(
+                        imageVector = MiuixIcons.Create,
+                        contentDescription = "积分"
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(text = if (hasPoints) "积分明细" else "积分登录")
                 }
             }
         }

@@ -12,10 +12,15 @@ import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
 import io.ktor.http.contentType
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import com.github.ilife798.data.model.BillRecord
+import com.github.ilife798.data.model.RechargeProduct
+import com.github.ilife798.data.model.RefundProgress
+import com.github.ilife798.data.model.WalletAccount
 import com.github.ilife798.util.currentTimeMillis
 
 class IlifeApi(private val client: HttpClient = createHttpClient()) {
@@ -89,8 +94,8 @@ class IlifeApi(private val client: HttpClient = createHttpClient()) {
             header("ApplicationType", "1,1")
         }
         val body = bodyJson(response)
-        val data = body["data"]?.jsonObject ?: return null
-        val account = data["account"]?.jsonObject ?: return null
+        val data = body["data"] as? JsonObject ?: return null
+        val account = data["account"] as? JsonObject ?: return null
         return AccountInfoDto(
             img = account["img"]?.jsonPrimitive?.content ?: "",
             name = account["name"]?.jsonPrimitive?.content ?: "",
@@ -116,10 +121,10 @@ class IlifeApi(private val client: HttpClient = createHttpClient()) {
             header("ApplicationType", "1,1")
         }
         val body = bodyJson(response)
-        val data = body["data"]?.jsonObject ?: return MasterResult()
-        val account = data["account"]?.jsonObject
+        val data = body["data"] as? JsonObject ?: return MasterResult()
+        val account = data["account"] as? JsonObject
         val accountId = account?.get("id")?.jsonPrimitive?.content ?: ""
-        val favos = data["favos"]?.jsonArray ?: return MasterResult(accountId)
+        val favos = data["favos"] as? JsonArray ?: return MasterResult(accountId)
         val devices = favos.map { item ->
             val obj = item.jsonObject
             val gene = obj["gene"]?.jsonObject
@@ -180,7 +185,7 @@ class IlifeApi(private val client: HttpClient = createHttpClient()) {
         }
         val body = bodyJson(response)
         if (body["code"]?.jsonPrimitive?.content?.toIntOrNull() != 0) return null
-        val data = body["data"]?.jsonObject ?: return null
+        val data = body["data"] as? JsonObject ?: return null
         val device = data["device"]?.jsonObject ?: return null
         val deviceStatus = device["status"]?.jsonPrimitive?.content?.toIntOrNull() ?: 0
         val gene = device["gene"]?.jsonObject
@@ -199,7 +204,7 @@ class IlifeApi(private val client: HttpClient = createHttpClient()) {
         }
         val body = bodyJson(response)
         if (body["code"]?.jsonPrimitive?.content?.toIntOrNull() != 0) return DevHomeResult()
-        val data = body["data"]?.jsonObject ?: return DevHomeResult()
+        val data = body["data"] as? JsonObject ?: return DevHomeResult()
         val deviceShare = data["deviceShare"]?.jsonObject
         val shareUserId = deviceShare?.get("sid")?.jsonPrimitive?.content ?: ""
         return DevHomeResult(shareUserId = shareUserId)
@@ -220,9 +225,10 @@ class IlifeApi(private val client: HttpClient = createHttpClient()) {
             header("ApplicationType", "1,5")
         }
         val body = bodyJson(response)
-        val data = body["data"]?.jsonObject ?: return MissionListResult(emptyList())
+        val data = body["data"] as? JsonObject ?: return MissionListResult(emptyList())
         val accScore = data["accScoreRsp"]?.jsonObject
         val validScore = accScore?.get("validScore")?.jsonPrimitive?.content?.toIntOrNull()
+        val totalScore = accScore?.get("totalScore")?.jsonPrimitive?.content?.toIntOrNull()
         val weekMask = accScore?.get("daily")?.jsonObject?.get("week")?.jsonPrimitive?.content?.toIntOrNull() ?: 0
         val dailyRsp = data["dailyRSP"]?.jsonObject
         val dailyAdId = dailyRsp?.get("adId")?.jsonPrimitive?.content ?: ""
@@ -238,7 +244,7 @@ class IlifeApi(private val client: HttpClient = createHttpClient()) {
             if (refId.isNotEmpty()) dailyDoneMap[refId] = limit
         }
 
-        val missions = data["missions"]?.jsonArray ?: return MissionListResult(emptyList(), validScore, weekMask, dailyAdId, dailyScore)
+        val missions = data["missions"]?.jsonArray ?: return MissionListResult(emptyList(), validScore, weekMask, dailyAdId, dailyScore, totalScore)
         val seen = mutableSetOf<String>()
         val list = missions.mapNotNull { item ->
             val obj = item.jsonObject
@@ -263,7 +269,7 @@ class IlifeApi(private val client: HttpClient = createHttpClient()) {
             list
         }
 
-        return MissionListResult(allMissions, validScore, weekMask, dailyAdId, dailyScore)
+        return MissionListResult(allMissions, validScore, weekMask, dailyAdId, dailyScore, totalScore)
     }
 
     suspend fun executeMission(token: String, uid: String, adId: String): DevResult {
@@ -288,7 +294,7 @@ class IlifeApi(private val client: HttpClient = createHttpClient()) {
         return parseDevResult(response.bodyAsText())
     }
 
-    suspend fun getScoreList(token: String, page: Int = 0, size: Int = 200): List<ScoreDto> {
+    suspend fun getScoreList(token: String, page: Int = 0, size: Int = 20): ScoreListResult {
         val response = client.get("${ApiConfig.baseUrl}/acc/score/score-lst") {
             parameter("page", page.toString())
             parameter("size", size.toString())
@@ -297,8 +303,9 @@ class IlifeApi(private val client: HttpClient = createHttpClient()) {
             header("ApplicationType", "1,5")
         }
         val body = bodyJson(response)
-        val data = body["data"]?.jsonArray ?: return emptyList()
-        return data.map { item ->
+        val data = body["data"] as? JsonArray ?: return ScoreListResult(emptyList(), 0)
+        val total = body["size"]?.jsonPrimitive?.content?.toIntOrNull() ?: data.size
+        val records = data.map { item ->
             val obj = item.jsonObject
             val nested = obj["data"]?.jsonObject
             val score = readScoreInt(obj, nested)
@@ -315,6 +322,172 @@ class IlifeApi(private val client: HttpClient = createHttpClient()) {
                 adId = adId
             )
         }
+        return ScoreListResult(records, total)
+    }
+
+    // --- Wallet & Bills ---
+    suspend fun getWalletOwner(token: String, eid: String = "", all: Boolean = true): WalletOwnerResult {
+        val response = client.get("${ApiConfig.baseUrl}/acc/wallet/owner") {
+            if (eid.isNotEmpty()) parameter("eid", eid)
+            parameter("all", all.toString())
+            header("Authorization", token)
+            header("ApplicationType", "1,1")
+        }
+        val body = bodyJson(response)
+        if (body["code"]?.jsonPrimitive?.content?.toIntOrNull() != 0) return WalletOwnerResult()
+        val data = body["data"] as? JsonObject ?: return WalletOwnerResult()
+        val aw = data["aw"] as? JsonObject
+        val active = aw?.let { parseWallet(it) }
+        val activeEid = active?.eid ?: ""
+        val eps = (data["eps"] as? JsonArray)?.mapNotNull { it as? JsonObject }?.map { parseWallet(it) } ?: emptyList()
+        val charge = data["charge"]?.jsonPrimitive?.content?.toIntOrNull() ?: 1
+        val refund = data["refund"]?.jsonPrimitive?.content?.toIntOrNull() ?: 1
+        val rfd = data["rfdProg"] as? JsonObject
+        val refundProgress = rfd?.let {
+            RefundProgress(
+                ctime = it["ctime"]?.jsonPrimitive?.content?.toLongOrNull() ?: -1L,
+                count = it["count"]?.jsonPrimitive?.content?.toIntOrNull() ?: 0,
+                total = it["total"]?.jsonPrimitive?.content?.toDoubleOrNull() ?: 0.0,
+                fail = it["fail"]?.jsonPrimitive?.content?.toIntOrNull()
+            )
+        }
+        return WalletOwnerResult(active, eps, activeEid, charge == 1, refund == 1, refundProgress)
+    }
+
+    suspend fun getWalletDetail(token: String, id: String, eid: String = ""): WalletAccount? {
+        if (id.isEmpty()) return null
+        val response = client.get("${ApiConfig.baseUrl}/acc/wallet/detail") {
+            parameter("id", id)
+            if (eid.isNotEmpty()) parameter("eid", eid)
+            header("Authorization", token)
+            header("ApplicationType", "1,1")
+        }
+        val body = bodyJson(response)
+        if (body["code"]?.jsonPrimitive?.content?.toIntOrNull() != 0) return null
+        val data = body["data"] as? JsonObject ?: return null
+        return parseWallet(data)
+    }
+
+    private fun parseWallet(obj: JsonObject): WalletAccount {
+        val ep = obj["ep"] as? JsonObject
+        val setting = ep?.get("setting") as? JsonObject
+        val owner = obj["owner"] as? JsonObject
+        return WalletAccount(
+            id = obj["id"]?.jsonPrimitive?.content ?: "",
+            eid = ep?.get("id")?.jsonPrimitive?.content ?: "",
+            ownerId = owner?.get("id")?.jsonPrimitive?.content ?: "",
+            name = ep?.get("name")?.jsonPrimitive?.content ?: obj["name"]?.jsonPrimitive?.content ?: "",
+            abbr = ep?.get("abbr")?.jsonPrimitive?.content ?: "",
+            olCash = obj["olCash"]?.jsonPrimitive?.content?.toDoubleOrNull() ?: 0.0,
+            olGift = obj["olGift"]?.jsonPrimitive?.content?.toDoubleOrNull() ?: 0.0,
+            ofCash = obj["ofCash"]?.jsonPrimitive?.content?.toDoubleOrNull() ?: 0.0,
+            ofGift = obj["ofGift"]?.jsonPrimitive?.content?.toDoubleOrNull() ?: 0.0,
+            total = obj["total"]?.jsonPrimitive?.content?.toDoubleOrNull() ?: 0.0,
+            auth = obj["auth"]?.jsonPrimitive?.content?.toBoolean() ?: false,
+            chargeEnabled = (setting?.get("olcharge")?.jsonPrimitive?.content?.toIntOrNull() ?: 1) == 1,
+            refundEnabled = (setting?.get("olrefund")?.jsonPrimitive?.content?.toIntOrNull() ?: 1) == 1
+        )
+    }
+
+    suspend fun getBillList(token: String, page: Int = 0, size: Int = 20, status: Int = 3): BillListResult {
+        val response = client.get("${ApiConfig.baseUrl}/bill/lst-owner") {
+            parameter("page", page.toString())
+            parameter("size", size.toString())
+            parameter("hasCount", (page == 0).toString())
+            parameter("status", status.toString())
+            header("Authorization", token)
+            header("ApplicationType", "1,1")
+        }
+        val body = bodyJson(response)
+        val data = body["data"] as? JsonArray ?: return BillListResult(emptyList(), 0)
+        val total = body["size"]?.jsonPrimitive?.content?.toIntOrNull() ?: data.size
+        val records = data.mapNotNull { item ->
+            val obj = item as? JsonObject ?: return@mapNotNull null
+            val bm = (obj["dev"] as? JsonObject)?.get("bm") as? JsonObject
+            BillRecord(
+                id = obj["id"]?.jsonPrimitive?.content ?: "",
+                cata = obj["cata"]?.jsonPrimitive?.content?.toIntOrNull() ?: 0,
+                type = obj["type"]?.jsonPrimitive?.content?.toIntOrNull() ?: 0,
+                msg = obj["msg"]?.jsonPrimitive?.content ?: "",
+                status = obj["status"]?.jsonPrimitive?.content?.toIntOrNull() ?: 0,
+                dir = obj["dir"]?.jsonPrimitive?.content?.toIntOrNull() ?: 1,
+                payment = obj["payment"]?.jsonPrimitive?.content?.toDoubleOrNull() ?: 0.0,
+                time = obj["utime"]?.jsonPrimitive?.content?.toLongOrNull()
+                    ?: obj["ctime"]?.jsonPrimitive?.content?.toLongOrNull() ?: 0L,
+                deviceType = bm?.get("dtype")?.jsonPrimitive?.content?.toIntOrNull() ?: 0
+            )
+        }
+        return BillListResult(records, total)
+    }
+
+    suspend fun getRechargeProducts(token: String, eid: String): List<RechargeProduct> {
+        if (eid.isEmpty()) return emptyList()
+        val response = client.get("${ApiConfig.baseUrl}/prd/lst") {
+            parameter("eid", eid)
+            parameter("type", "1")
+            parameter("status", "1")
+            parameter("all", "false")
+            parameter("did", "")
+            parameter("page", "0")
+            parameter("size", "100")
+            parameter("hasCount", "false")
+            header("Authorization", token)
+            header("ApplicationType", "1,1")
+        }
+        val body = bodyJson(response)
+        val data = body["data"] as? JsonArray ?: return emptyList()
+        return data.mapNotNull { item ->
+            val obj = item as? JsonObject ?: return@mapNotNull null
+            val id = obj["id"]?.jsonPrimitive?.content ?: ""
+            if (id.isEmpty()) return@mapNotNull null
+            RechargeProduct(
+                id = id,
+                name = obj["name"]?.jsonPrimitive?.content ?: "充值",
+                price = obj["curPrice"]?.jsonPrimitive?.content?.toDoubleOrNull() ?: 0.0,
+                originalPrice = obj["ogiPrice"]?.jsonPrimitive?.content?.toDoubleOrNull() ?: 0.0,
+                description = obj["desc"]?.jsonPrimitive?.content ?: ""
+            )
+        }.distinctBy { "${it.name}|${it.price}|${it.originalPrice}" }
+    }
+
+    suspend fun createRechargeOrder(token: String, eid: String, ownerId: String, productId: String): String? {
+        if (eid.isEmpty() || ownerId.isEmpty() || productId.isEmpty()) return null
+        val payload = """{"cata":1,"contact":{"id":"$ownerId"},"ep":{"id":"$eid"},"note":"钱包充值","owner":{"id":"$ownerId"},"prds":[{"id":"$productId","count":1}]}"""
+        val response = client.post("${ApiConfig.baseUrl}/bill/save") {
+            contentType(ContentType.Application.Json)
+            setBody(payload)
+            header("Authorization", token)
+            header("ApplicationType", "1,1")
+        }
+        val body = json.parseToJsonElement(response.bodyAsText()).jsonObject
+        checkSessionExpired(body)
+        if (body["code"]?.jsonPrimitive?.content?.toIntOrNull() != 0) return null
+        return body["data"]?.jsonPrimitive?.content?.takeIf { it.isNotEmpty() && it != "null" }
+    }
+
+    suspend fun prepayAlipay(token: String, orderId: String): String? {
+        if (orderId.isEmpty()) return null
+        val response = client.get("${ApiConfig.baseUrl}/trans/prepay/21") {
+            parameter("id", orderId)
+            header("Authorization", token)
+            header("ApplicationType", "1,1")
+        }
+        val body = bodyJson(response)
+        if (body["code"]?.jsonPrimitive?.content?.toIntOrNull() != 0) return null
+        return body["data"]?.jsonPrimitive?.content?.takeIf { it.isNotEmpty() && it != "null" }
+    }
+
+    // 钱包退款：POST /acc/wallet/refund，type=23（支付宝小程序，与官方 RefundActivity 一致）
+    suspend fun refundWallet(token: String, eid: String): DevResult {
+        if (eid.isEmpty()) return DevResult(false, -1, "钱包信息缺失")
+        val payload = """{"eid":"$eid","type":23}"""
+        val response = client.post("${ApiConfig.baseUrl}/acc/wallet/refund") {
+            contentType(ContentType.Application.Json)
+            setBody(payload)
+            header("Authorization", token)
+            header("ApplicationType", "1,1")
+        }
+        return parseDevResult(response.bodyAsText())
     }
 
     private fun readScoreInt(obj: JsonObject, nested: JsonObject?): Int {
@@ -335,5 +508,15 @@ data class DevHomeResult(val shareUserId: String = "")
 data class DevStatusResult(val deviceStatus: Int, val geneStatus: Int, val userId: String = "")
 data class DevResult(val success: Boolean, val code: Int, val message: String)
 data class MissionDto(val adId: String, val name: String, val score: Int, val limit: Int, val dailyCompleted: Int = 0, val isDailySignin: Boolean = false)
-data class MissionListResult(val missions: List<MissionDto>, val validScore: Int? = null, val weekMask: Int = 0, val dailyAdId: String = "", val dailyScore: Int = 5)
+data class MissionListResult(val missions: List<MissionDto>, val validScore: Int? = null, val weekMask: Int = 0, val dailyAdId: String = "", val dailyScore: Int = 5, val totalScore: Int? = null)
 data class ScoreDto(val score: Int, val name: String, val time: String, val adId: String = "")
+data class ScoreListResult(val records: List<ScoreDto>, val total: Int)
+data class WalletOwnerResult(
+    val active: WalletAccount? = null,
+    val wallets: List<WalletAccount> = emptyList(),
+    val activeEid: String = "",
+    val chargeEnabled: Boolean = true,
+    val refundEnabled: Boolean = true,
+    val refundProgress: RefundProgress? = null
+)
+data class BillListResult(val records: List<BillRecord>, val total: Int)

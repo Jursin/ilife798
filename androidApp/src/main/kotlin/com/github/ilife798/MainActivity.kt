@@ -11,6 +11,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         ApplicationContext.instance = applicationContext
+        ActivityHolder.current = this
         AppStorage.instance = PersistentStorage(applicationContext)
         ApiConfig.init(
             gateway = BuildConfig.API_GATEWAY,
@@ -21,5 +22,12 @@ class MainActivity : ComponentActivity() {
         setContent {
             App()
         }
+    }
+
+    override fun onDestroy() {
+        if (ActivityHolder.current === this) {
+            ActivityHolder.current = null
+        }
+        super.onDestroy()
     }
 }

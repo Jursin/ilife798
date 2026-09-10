@@ -1,9 +1,12 @@
 package com.github.ilife798.ui.page.home
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -43,12 +46,16 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.overScrollVertical
 import top.yukonga.miuix.kmp.utils.scrollEndHaptic
 import top.yukonga.miuix.kmp.window.WindowDialog
+import com.github.ilife798.copyTextToClipboard
 import com.github.ilife798.data.viewmodel.AppViewModel
+import com.github.ilife798.showToast
 import com.github.ilife798.ui.theme.WindowBlurEffect
 import com.github.ilife798.ui.theme.appBarBlur
 import com.github.ilife798.ui.theme.blurAppBarColor
 import com.github.ilife798.ui.theme.captureForBlur
 import com.github.ilife798.ui.theme.rememberAppBlurBackdrop
+import kotlin.math.abs
+import kotlin.math.round
 
 @Composable
 fun HomePage(viewModel: AppViewModel, onDeviceAddClick: () -> Unit = {}) {
@@ -60,6 +67,7 @@ fun HomePage(viewModel: AppViewModel, onDeviceAddClick: () -> Unit = {}) {
         if (state.account.token.isNotEmpty() || state.account.appToken.isNotEmpty()) {
             viewModel.loadDeviceInfo()
             viewModel.loadScoreInfo()
+            viewModel.loadSpendingStats()
         }
     }
 
@@ -86,28 +94,64 @@ fun HomePage(viewModel: AppViewModel, onDeviceAddClick: () -> Unit = {}) {
                 .padding(top = 8.dp, bottom = 80.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            PointsCard(modifier = Modifier.fillMaxWidth(), available = state.points.available)
+            val stats = viewModel.spendingStats
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(IntrinsicSize.Min),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                SpendingCard(
+                    label = "昨日花费",
+                    value = stats.yesterday,
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                )
+                SpendingCard(
+                    label = "今日花费",
+                    value = stats.today,
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                )
+                SpendingCard(
+                    label = "本月平均花费",
+                    value = stats.monthAverage,
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                )
+            }
             DeviceCard(viewModel, onDeviceAddClick)
         }
     }
 }
 
 @Composable
-private fun PointsCard(modifier: Modifier = Modifier, available: Int?) {
+private fun SpendingCard(label: String, value: Double, modifier: Modifier = Modifier) {
     Card(modifier = modifier) {
         Column(modifier = Modifier.padding(12.dp)) {
             Text(
-                text = "可用积分",
+                text = label,
                 style = MiuixTheme.textStyles.body2,
                 color = MiuixTheme.colorScheme.onSurfaceVariantSummary
             )
             Text(
-                text = available?.toString() ?: "-",
-                style = MiuixTheme.textStyles.title1,
+                text = "¥${formatMoney(value)}",
+                style = MiuixTheme.textStyles.title2,
                 color = MiuixTheme.colorScheme.onSurface
             )
         }
     }
+}
+
+private fun formatMoney(value: Double): String {
+    val negative = value < 0
+    val scaled = round(abs(value) * 100).toLong()
+    val intPart = scaled / 100
+    val frac = (scaled % 100).toString().padStart(2, '0')
+    return (if (negative) "-" else "") + "$intPart.$frac"
 }
 
 @Composable
@@ -285,6 +329,10 @@ private fun DeviceItem(
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .clickable {
+                copyTextToClipboard(device.id)
+                showToast("已复制设备编号")
+            }
             .padding(vertical = 8.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically

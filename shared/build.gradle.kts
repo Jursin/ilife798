@@ -48,6 +48,7 @@ kotlin {
         androidMain.dependencies {
             implementation(libs.ktor.okhttp)
             implementation(libs.androidx.activity.compose)
+            implementation(libs.alipay.sdk)
         }
         iosMain.dependencies {
             implementation(libs.ktor.darwin)

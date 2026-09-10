@@ -6,10 +6,15 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.text.font.FontWeight
@@ -18,6 +23,7 @@ import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.HorizontalDivider
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
+import top.yukonga.miuix.kmp.basic.InfiniteProgressIndicator
 import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.Text
@@ -35,23 +41,36 @@ import com.github.ilife798.ui.theme.rememberAppBlurBackdrop
 import com.github.ilife798.util.formatTimestamp
 import kotlin.math.round
 
+private const val LOAD_MORE_THRESHOLD_PX = 200
+
 @Composable
 fun ScorePage(viewModel: AppViewModel, onBack: () -> Unit) {
     val state = viewModel.state
     val scores = state.scoreRecords
     val scrollBehavior = MiuixScrollBehavior()
     val blurBackdrop = rememberAppBlurBackdrop(state.appBlur)
+    val scrollState = rememberScrollState()
 
     LaunchedEffect(Unit) {
         if (state.account.token.isNotEmpty()) {
-            viewModel.loadScoreInfoNoCooldown()
+            viewModel.refreshScorePage()
         }
+    }
+
+    val shouldLoadMore by remember {
+        derivedStateOf {
+            val max = scrollState.maxValue
+            max > 0 && scrollState.value >= max - LOAD_MORE_THRESHOLD_PX
+        }
+    }
+    LaunchedEffect(shouldLoadMore, scores.size) {
+        if (shouldLoadMore) viewModel.loadMoreScores()
     }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = "积分流水",
+                title = "积分明细",
                 modifier = Modifier.appBarBlur(blurBackdrop),
                 color = blurAppBarColor(blurBackdrop),
                 scrollBehavior = scrollBehavior,
@@ -73,7 +92,7 @@ fun ScorePage(viewModel: AppViewModel, onBack: () -> Unit) {
                 .nestedScroll(scrollBehavior.nestedScrollConnection)
                 .scrollEndHaptic()
                 .overScrollVertical()
-                .verticalScroll(rememberScrollState())
+                .verticalScroll(scrollState)
                 .padding(paddingValues)
                 .padding(horizontal = 16.dp)
                 .padding(top = 8.dp, bottom = 16.dp),
@@ -82,21 +101,27 @@ fun ScorePage(viewModel: AppViewModel, onBack: () -> Unit) {
             Card(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
-                        text = "当前积分",
+                        text = "积分概览",
                         style = MiuixTheme.textStyles.title2,
                         color = MiuixTheme.colorScheme.onSurface
                     )
-                    Text(
-                        text = state.points.available?.toString() ?: "-",
-                        style = MiuixTheme.textStyles.title1,
-                        color = MiuixTheme.colorScheme.onSurface
-                    )
-                    Text(
-                        text = "≈${formatTwoDecimals((state.points.available ?: 0) / 1000.0)}元",
-                        style = MiuixTheme.textStyles.body2,
-                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                        modifier = Modifier.padding(top = 2.dp)
-                    )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 12.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        ScoreSummaryItem(
+                            label = "可用积分",
+                            value = state.points.available,
+                            alignEnd = false
+                        )
+                        ScoreSummaryItem(
+                            label = "累计积分",
+                            value = state.points.total,
+                            alignEnd = true
+                        )
+                    }
                 }
             }
 
@@ -125,7 +150,7 @@ fun ScorePage(viewModel: AppViewModel, onBack: () -> Unit) {
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(
                                         text = record.name,
-                                        style = MiuixTheme.textStyles.body2,
+                                        style = MiuixTheme.textStyles.subtitle,
                                         color = MiuixTheme.colorScheme.onSurface
                                     )
                                     Text(
@@ -142,6 +167,10 @@ fun ScorePage(viewModel: AppViewModel, onBack: () -> Unit) {
                                 )
                             }
                         }
+                        ScoreListFooter(
+                            loadingMore = viewModel.scoreLoadingMore,
+                            hasMore = viewModel.scoreHasMore
+                        )
                     }
                 }
             }
@@ -149,10 +178,61 @@ fun ScorePage(viewModel: AppViewModel, onBack: () -> Unit) {
     }
 }
 
+@Composable
+private fun ScoreSummaryItem(label: String, value: Int?, alignEnd: Boolean) {
+    Column(horizontalAlignment = if (alignEnd) Alignment.End else Alignment.Start) {
+        Text(
+            text = label,
+            style = MiuixTheme.textStyles.body2,
+            color = MiuixTheme.colorScheme.onSurfaceVariantSummary
+        )
+        Text(
+            text = value?.toString() ?: "-",
+            style = MiuixTheme.textStyles.title1,
+            color = MiuixTheme.colorScheme.onSurface
+        )
+        Text(
+            text = "≈${formatTwoDecimals((value ?: 0) / 1000.0)}元",
+            style = MiuixTheme.textStyles.body2,
+            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+            modifier = Modifier.padding(top = 2.dp)
+        )
+    }
+}
+
+@Composable
+private fun ScoreListFooter(loadingMore: Boolean, hasMore: Boolean) {
+    when {
+        loadingMore -> Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 12.dp),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            InfiniteProgressIndicator(
+                modifier = Modifier.size(18.dp),
+                size = 18.dp,
+                strokeWidth = 2.dp,
+                orbitingDotSize = 3.dp
+            )
+        }
+
+        !hasMore -> Text(
+            text = "已加载全部记录",
+            style = MiuixTheme.textStyles.body2,
+            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 12.dp)
+        )
+    }
+}
+
 private fun formatScoreTime(time: String): String {
     if (time.isEmpty()) return ""
     val ts = time.toLongOrNull() ?: return time
-    return formatTimestamp(ts, "MM-dd HH:mm")
+    return formatTimestamp(ts, "yyyy-MM-dd HH:mm:ss")
 }
 
 private fun formatTwoDecimals(value: Double): String {

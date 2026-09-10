@@ -48,6 +48,7 @@ import com.github.ilife798.ui.page.me.MePage
 import com.github.ilife798.ui.page.login.LoginPage
 import com.github.ilife798.ui.page.score.ScorePage
 import com.github.ilife798.ui.page.account.AccountPage
+import com.github.ilife798.ui.page.bill.MyBillPage
 import com.github.ilife798.ui.page.device.DeviceAddPage
 
 private val tabs = listOf(
@@ -199,7 +200,8 @@ fun MainScaffold(viewModel: AppViewModel) {
                                     viewModel = viewModel,
                                     onLoginClick = { isAlipay -> backStack.add(Page.Login(isAlipay = isAlipay)) },
                                     onScoreClick = { backStack.add(Page.Score) },
-                                    onAccountClick = { backStack.add(Page.Account) }
+                                    onAccountClick = { backStack.add(Page.Account) },
+                                    onBillClick = { backStack.add(Page.Bill) }
                                 )
                             }
                         }
@@ -234,6 +236,14 @@ fun MainScaffold(viewModel: AppViewModel) {
             entry<Page.Account> {
                 NavEntry(interceptPredictiveBack, onBack) {
                     AccountPage(
+                        viewModel = viewModel,
+                        onBack = onBack
+                    )
+                }
+            }
+            entry<Page.Bill> {
+                NavEntry(interceptPredictiveBack, onBack) {
+                    MyBillPage(
                         viewModel = viewModel,
                         onBack = onBack
                     )
