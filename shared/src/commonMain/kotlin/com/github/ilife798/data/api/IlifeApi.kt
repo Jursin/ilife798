@@ -208,6 +208,27 @@ class IlifeApi(private val client: HttpClient = createHttpClient()) {
         return parseDevResult(response.bodyAsText())
     }
 
+    // 扫码：用二维码中解析出的 id 换取设备信息
+    suspend fun qrUse(token: String, id: String): QrUseResult {
+        val response = client.get("${ApiConfig.baseUrl}/qr/use") {
+            parameter("id", id)
+            header("Authorization", token)
+            header("ApplicationType", "1,1")
+        }
+        val body = bodyJson(response)
+        val code = body["code"]?.jsonPrimitive?.content?.toIntOrNull() ?: -1
+        val data = body["data"] as? JsonObject
+        val type = data?.get("qr")?.jsonObject?.get("type")?.jsonPrimitive?.content?.toIntOrNull()
+        val deviceId = data?.get("dev")?.jsonObject?.get("id")?.jsonPrimitive?.content ?: ""
+        return QrUseResult(
+            success = code == 0,
+            code = code,
+            type = type,
+            deviceId = deviceId,
+            message = body["msg"]?.jsonPrimitive?.content ?: ""
+        )
+    }
+
     suspend fun getDevStatus(token: String, did: String, appType: String = "1,1"): DevStatusResult? {
         val response = client.get("${ApiConfig.baseUrl}/ui/app/dev/status") {
             parameter("did", did)
@@ -520,6 +541,7 @@ data class DeviceDto(val id: String, val name: String, val status: Int = 0, val 
 data class MasterResult(val accountId: String = "", val devices: List<DeviceDto> = emptyList())
 data class DevStatusResult(val deviceStatus: Int, val geneStatus: Int)
 data class DevResult(val success: Boolean, val code: Int, val message: String)
+data class QrUseResult(val success: Boolean, val code: Int, val type: Int?, val deviceId: String, val message: String)
 data class MissionDto(val adId: String, val name: String, val score: Int, val limit: Int, val dailyCompleted: Int = 0, val isDailySignin: Boolean = false)
 data class MissionListResult(val missions: List<MissionDto>, val validScore: Int? = null, val weekMask: Int = 0, val dailyAdId: String = "", val dailyScore: Int = 5, val totalScore: Int? = null)
 data class ScoreDto(val score: Int, val name: String, val time: String, val adId: String = "")

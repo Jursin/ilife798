@@ -50,6 +50,7 @@ import com.github.ilife798.ui.page.score.ScorePage
 import com.github.ilife798.ui.page.account.AccountPage
 import com.github.ilife798.ui.page.bill.MyBillPage
 import com.github.ilife798.ui.page.device.DeviceAddPage
+import com.github.ilife798.ui.page.device.QrScannerPage
 import com.github.ilife798.ui.page.about.OpenSourceLicensePage
 
 private val tabs = listOf(
@@ -262,7 +263,19 @@ fun MainScaffold(viewModel: AppViewModel) {
                 NavEntry(interceptPredictiveBack, onBack) {
                     DeviceAddPage(
                         viewModel = viewModel,
-                        onBack = onBack
+                        onBack = onBack,
+                        onScanClick = { navigate(Page.DeviceScan) }
+                    )
+                }
+            }
+            entry<Page.DeviceScan> {
+                NavEntry(interceptPredictiveBack, onBack) {
+                    QrScannerPage(
+                        onBack = onBack,
+                        onResult = { raw ->
+                            viewModel.submitScannedRaw(raw)
+                            onBack()
+                        }
                     )
                 }
             }

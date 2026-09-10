@@ -30,12 +30,12 @@ val secretsProps = Properties().apply {
 
 android {
     namespace = "com.github.ilife798"
-    compileSdk = libs.versions.android.compileSdk.get().toInt()
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "com.github.ilife798"
-        minSdk = libs.versions.android.minSdk.get().toInt()
-        targetSdk = libs.versions.android.targetSdk.get().toInt()
+        minSdk = 26
+        targetSdk = 37
         versionCode = 1
         versionName = "1.0"
 

@@ -31,11 +31,13 @@ import com.github.ilife798.pay.AlipayPayResult
 import com.github.ilife798.pay.payWithAlipay
 import com.github.ilife798.logDebug
 import com.github.ilife798.showToast
+import com.github.ilife798.util.QrCodeParser
 import com.github.ilife798.util.currentTimeMillis
 import com.github.ilife798.util.currentTimeFormatted
 import com.github.ilife798.util.formatTimestamp
 import com.github.ilife798.util.getDayOfWeek
 import com.github.ilife798.util.getTodayStart
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -52,6 +54,10 @@ private const val SCORE_PAGE_SIZE = 20
 private const val BILL_PAGE_SIZE = 20
 private const val BILL_STATUS = 3
 private const val SPENDING_MAX_PAGES = 10
+
+// 二维码类型
+private const val QR_TYPE_DEVICE = 3
+private const val QR_TYPE_DOOR_LOCK = 8
 
 class AppViewModel : ViewModel() {
 
@@ -487,6 +493,58 @@ class AppViewModel : ViewModel() {
         }
     }
 
+    // 扫码解析出的设备编号，供 DeviceAddPage 回填输入框
+    var scannedDeviceId by mutableStateOf<String?>(null)
+        private set
+
+    // 扫码结果在 viewModelScope 中解析，避免随扫码页/添加页离开 composition 被取消
+    fun submitScannedRaw(raw: String) {
+        viewModelScope.launch {
+            val deviceId = resolveScanDeviceId(raw) ?: return@launch
+            scannedDeviceId = deviceId
+        }
+    }
+
+    fun consumeScannedDeviceId() {
+        scannedDeviceId = null
+    }
+
+    // 解析扫码内容：路径形式直接就是设备编号，?id= 形式经 /qr/use 换取设备编号
+    private suspend fun resolveScanDeviceId(raw: String): String? {
+        val token = state.account.appToken.ifEmpty { state.account.token }
+        if (token.isEmpty()) {
+            showToast("请先登录")
+            return null
+        }
+        val parsed = QrCodeParser.parse(raw)
+        parsed.deviceId?.takeIf { it.isNotEmpty() }?.let { return it }
+        val qrId = parsed.qrId
+        if (qrId.isNullOrEmpty()) {
+            showToast("无法识别二维码内容")
+            return null
+        }
+        return try {
+            val result = api.qrUse(token, qrId)
+            if (!result.success) return null
+            if (result.type != QR_TYPE_DEVICE && result.type != QR_TYPE_DOOR_LOCK) {
+                showToast("暂不支持该类型二维码")
+                return null
+            }
+            val deviceId = result.deviceId
+            if (deviceId.isEmpty()) {
+                showToast("二维码中不包含设备信息")
+                return null
+            }
+            deviceId
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            logError("resolveScanDeviceId", e)
+            showToast("扫码解析失败：${e.message}")
+            null
+        }
+    }
+
     fun removeDevice(deviceId: String) {
         val token = state.account.appToken.ifEmpty { state.account.token }
         if (token.isEmpty()) return
@@ -531,7 +589,9 @@ class AppViewModel : ViewModel() {
                 showToast(if (starting) "设备已启动" else "设备已停止")
                 // 第一轮：5次 × 2.5秒（官方参数）
                 var newStatus: DevStatusResult? = null
-                for (i in 1..5) {
+                var attempt = 0
+                while (attempt < 5) {
+                    attempt++
                     delay(2500.milliseconds)
                     if (!isCurrentToken(token)) return@launch
                     newStatus = api.getDevStatus(token, deviceId, appType)
@@ -539,7 +599,9 @@ class AppViewModel : ViewModel() {
                 }
                 // 第二轮（如需）：25次 × 5秒
                 if (newStatus?.geneStatus == currentStatus?.geneStatus) {
-                    for (i in 1..25) {
+                    attempt = 0
+                    while (attempt < 25) {
+                        attempt++
                         delay(5000.milliseconds)
                         if (!isCurrentToken(token)) return@launch
                         newStatus = api.getDevStatus(token, deviceId, appType)
@@ -1172,7 +1234,7 @@ class AppViewModel : ViewModel() {
                     )
                     loadScoreInfo()
                 }
-            } catch (_: kotlinx.coroutines.CancellationException) {
+            } catch (_: CancellationException) {
                 if (isCurrentAccount()) addTaskLog("任务已停止")
             } catch (e: Exception) {
                 if (isCurrentAccount()) {

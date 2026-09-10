@@ -38,8 +38,8 @@ kotlin {
     
     android {
        namespace = "com.github.ilife798.shared"
-       compileSdk = libs.versions.android.compileSdk.get().toInt()
-       minSdk = libs.versions.android.minSdk.get().toInt()
+       compileSdk = 37
+       minSdk = 26
     
        compilerOptions {
            jvmTarget = JvmTarget.JVM_21
@@ -62,12 +62,18 @@ kotlin {
             implementation(libs.ktor.okhttp)
             implementation(libs.androidx.activity.compose)
             implementation(libs.alipay.sdk)
+            implementation(libs.androidx.camera.core)
+            implementation(libs.androidx.camera.camera2)
+            implementation(libs.androidx.camera.lifecycle)
+            implementation(libs.androidx.camera.view)
+            implementation(libs.zxing.core)
         }
         iosMain.dependencies {
             implementation(libs.ktor.darwin)
         }
         commonMain.dependencies {
-            implementation(compose.components.resources)
+            @Suppress("DEPRECATION")
+            implementation("org.jetbrains.compose.components:components-resources:${libs.versions.composeMultiplatform.get()}")
             implementation(libs.compose.runtime)
             implementation(libs.compose.foundation)
             implementation(libs.compose.ui)

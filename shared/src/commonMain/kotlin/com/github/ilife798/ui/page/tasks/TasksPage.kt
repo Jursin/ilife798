@@ -103,7 +103,7 @@ fun TasksPage(viewModel: AppViewModel) {
                 onClick = {
                     when {
                         isLoading -> showStopDialog = true
-                        state.account.token.isEmpty() -> showToast("请先完成积分登录")
+                        state.account.appToken.isEmpty() && state.account.token.isEmpty() -> showToast("请先登录")
                         else -> viewModel.runAllTasks()
                     }
                 },
