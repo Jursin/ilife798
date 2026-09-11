@@ -90,6 +90,11 @@ fun LoginPage(viewModel: AppViewModel, isAlipay: Boolean = false, onBack: () -> 
         viewModel.loadCaptcha()
     }
 
+    // 验证码刷新后清空旧输入
+    LaunchedEffect(viewModel.captchaKey) {
+        if (viewModel.captchaKey.isNotEmpty()) graphCode = ""
+    }
+
     val title = if (isAlipay) "积分登录" else "设备登录"
     val scrollBehavior = MiuixScrollBehavior()
     val blurBackdrop = rememberAppBlurBackdrop(viewModel.state.appBlur)

@@ -21,6 +21,7 @@ object StorageKeys {
     const val APP_BLUR = "setting_app_blur"
     const val PREDICTIVE_BACK = "setting_predictive_back"
     const val THEME_MODE = "setting_theme_mode"
+    const val HOME_DEVICE_TYPE = "home_device_type"
 }
 
 object AppStorage {

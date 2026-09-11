@@ -18,6 +18,9 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import com.github.ilife798.data.model.BillRecord
+import com.github.ilife798.data.model.DeviceGoods
+import com.github.ilife798.data.model.DeviceOption
+import com.github.ilife798.data.model.DeviceStartOptions
 import com.github.ilife798.data.model.RechargeProduct
 import com.github.ilife798.data.model.RefundProgress
 import com.github.ilife798.data.model.WalletAccount
@@ -165,22 +168,24 @@ class IlifeApi(private val client: HttpClient = createHttpClient()) {
             val gene = obj["gene"]?.jsonObject
             val deviceStatus = obj["status"]?.jsonPrimitive?.content?.toIntOrNull() ?: 0
             val geneStatus = gene?.get("status")?.jsonPrimitive?.content?.toIntOrNull() ?: 0
+            val dtype = obj["bm"]?.jsonObject?.get("dtype")?.jsonPrimitive?.content?.toIntOrNull() ?: 0
             DeviceDto(
                 id = obj["id"]?.jsonPrimitive?.content ?: "",
                 name = obj["name"]?.jsonPrimitive?.content ?: "",
                 status = deviceStatus,
-                geneStatus = geneStatus
+                geneStatus = geneStatus,
+                dtype = dtype
             )
         }
         return MasterResult(accountId, devices)
     }
 
-    suspend fun devStart(token: String, did: String, appType: String = "1,1", ptype: Int = 91, reportError: Boolean = true): DevResult {
+    suspend fun devStart(token: String, did: String, appType: String = "1,1", ptype: Int = 91, args: String = "", reportError: Boolean = true): DevResult {
         val response = client.get("${ApiConfig.baseUrl}/dev/start") {
             parameter("did", did)
             parameter("upgrade", "true")
             parameter("ptype", ptype.toString())
-            parameter("args", "")
+            parameter("args", args)
             parameter("rcp", "false")
             parameter("cnt", "1")
             header("Authorization", token)
@@ -244,6 +249,37 @@ class IlifeApi(private val client: HttpClient = createHttpClient()) {
         val gene = device["gene"]?.jsonObject
         val geneStatus = gene?.get("status")?.jsonPrimitive?.content?.toIntOrNull() ?: 0
         return DevStatusResult(deviceStatus = deviceStatus, geneStatus = geneStatus)
+    }
+
+    // 启动前获取设备可选项（模式/通道/货道），more=true
+    suspend fun getDeviceStartOptions(token: String, did: String, appType: String = "1,1"): DeviceStartOptions {
+        val response = client.get("${ApiConfig.baseUrl}/ui/app/dev/status") {
+            parameter("did", did)
+            parameter("more", "true")
+            header("Authorization", token)
+            header("ApplicationType", appType)
+        }
+        val body = bodyJson(response, reportError = false)
+        if (body["code"]?.jsonPrimitive?.content?.toIntOrNull() != 0) return DeviceStartOptions()
+        val device = (body["data"] as? JsonObject)?.get("device") as? JsonObject ?: return DeviceStartOptions()
+        val parts = (device["bm"]?.jsonObject?.get("parts") as? JsonArray)?.mapNotNull { item ->
+            val obj = item as? JsonObject ?: return@mapNotNull null
+            DeviceOption(
+                mode = obj["mode"]?.jsonPrimitive?.content?.toIntOrNull() ?: -1,
+                name = obj["name"]?.jsonPrimitive?.content ?: "",
+                rate = obj["rate"]?.jsonPrimitive?.content?.toDoubleOrNull() ?: 0.0,
+                maxT = obj["maxT"]?.jsonPrimitive?.content?.toIntOrNull() ?: 0
+            )
+        } ?: emptyList()
+        val subCount = (device["subs"] as? JsonArray)?.size ?: 0
+        val goods = (device["gs"]?.jsonObject?.get("items") as? JsonArray)?.mapNotNull { item ->
+            val obj = item as? JsonObject ?: return@mapNotNull null
+            DeviceGoods(
+                pos = obj["pos"]?.jsonPrimitive?.content?.toIntOrNull() ?: 0,
+                out = obj["out"]?.jsonPrimitive?.content?.toIntOrNull() ?: 0
+            )
+        } ?: emptyList()
+        return DeviceStartOptions(parts = parts, subCount = subCount, goods = goods)
     }
 
     private fun parseDevResult(raw: String, reportError: Boolean = true): DevResult {
@@ -537,7 +573,7 @@ class IlifeApi(private val client: HttpClient = createHttpClient()) {
 data class LoginResult(val success: Boolean, val token: String = "", val uid: String = "", val eid: String = "", val error: String = "")
 data class AccountInfoDto(val id: String = "", val img: String = "", val name: String = "", val pn: String = "")
 data class TokenProbe(val appValid: Boolean, val mainValid: Boolean, val uid: String = "")
-data class DeviceDto(val id: String, val name: String, val status: Int = 0, val geneStatus: Int = 0)
+data class DeviceDto(val id: String, val name: String, val status: Int = 0, val geneStatus: Int = 0, val dtype: Int = 0)
 data class MasterResult(val accountId: String = "", val devices: List<DeviceDto> = emptyList())
 data class DevStatusResult(val deviceStatus: Int, val geneStatus: Int)
 data class DevResult(val success: Boolean, val code: Int, val message: String)

@@ -1,3 +1,5 @@
 <resources>
     <string name="app_name">ILife798</string>
+    <string name="shortcut_scan_short">扫一扫</string>
+    <string name="shortcut_scan_long">扫描二维码</string>
 </resources>

@@ -10,8 +10,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -42,6 +44,7 @@ import com.github.ilife798.ui.theme.blurAppBarColor
 import com.github.ilife798.ui.theme.captureForBlur
 import com.github.ilife798.ui.theme.rememberAppBlurBackdrop
 import com.github.ilife798.data.viewmodel.AppViewModel
+import com.github.ilife798.AppShortcut
 import com.github.ilife798.ui.page.home.HomePage
 import com.github.ilife798.ui.page.tasks.TasksPage
 import com.github.ilife798.ui.page.me.MePage
@@ -54,7 +57,7 @@ import com.github.ilife798.ui.page.device.QrScannerPage
 import com.github.ilife798.ui.page.about.OpenSourceLicensePage
 
 private val tabs = listOf(
-    NavigationItem("主页", MiuixIcons.Home),
+    NavigationItem("首页", MiuixIcons.Home),
     NavigationItem("任务", MiuixIcons.ListView),
     NavigationItem("我的", MiuixIcons.Contacts)
 )
@@ -143,6 +146,17 @@ fun MainScaffold(viewModel: AppViewModel) {
 
     val interceptPredictiveBack = !predictiveBackEnabled && backStack.size > 1
 
+    // 桌面快捷方式“扫一扫”：冷启动与 onNewIntent 均通过该信号跳转扫码页
+    val scanRequestId = AppShortcut.scanRequestId
+    var scanFromShortcut by remember { mutableStateOf(false) }
+    LaunchedEffect(scanRequestId) {
+        if (scanRequestId > 0) {
+            scanFromShortcut = true
+            navigate(Page.DeviceScan)
+            AppShortcut.consumeScan()
+        }
+    }
+
     val pagerState = rememberPagerState(pageCount = { 3 })
     val coroutineScope = rememberCoroutineScope()
     val mainPagerState = rememberMainPagerState(pagerState, coroutineScope)
@@ -203,7 +217,10 @@ fun MainScaffold(viewModel: AppViewModel) {
                                     viewModel = viewModel,
                                     onDeviceAddClick = { navigate(Page.DeviceAdd) }
                                 )
-                                1 -> TasksPage(viewModel = viewModel)
+                                1 -> TasksPage(
+                                    viewModel = viewModel,
+                                    onLoginClick = { isAlipay -> navigate(Page.Login(isAlipay = isAlipay)) }
+                                )
                                 2 -> MePage(
                                     viewModel = viewModel,
                                     onLoginClick = { isAlipay -> navigate(Page.Login(isAlipay = isAlipay)) },
@@ -264,7 +281,10 @@ fun MainScaffold(viewModel: AppViewModel) {
                     DeviceAddPage(
                         viewModel = viewModel,
                         onBack = onBack,
-                        onScanClick = { navigate(Page.DeviceScan) }
+                        onScanClick = {
+                            scanFromShortcut = false
+                            navigate(Page.DeviceScan)
+                        }
                     )
                 }
             }
@@ -275,6 +295,8 @@ fun MainScaffold(viewModel: AppViewModel) {
                         onResult = { raw ->
                             viewModel.submitScannedRaw(raw)
                             onBack()
+                            // 由快捷方式进入时，扫码后跳转添加设备页以便回填设备编号
+                            if (scanFromShortcut) navigate(Page.DeviceAdd)
                         }
                     )
                 }

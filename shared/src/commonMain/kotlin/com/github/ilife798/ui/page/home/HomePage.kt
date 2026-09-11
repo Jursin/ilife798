@@ -26,11 +26,14 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.unit.dp
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Card
+import top.yukonga.miuix.kmp.basic.DropdownEntry
+import top.yukonga.miuix.kmp.basic.DropdownItem
 import top.yukonga.miuix.kmp.basic.HorizontalDivider
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
 import top.yukonga.miuix.kmp.basic.PullToRefresh
+import top.yukonga.miuix.kmp.basic.RadioButton
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
@@ -38,15 +41,17 @@ import top.yukonga.miuix.kmp.basic.TopAppBar
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Add
 import top.yukonga.miuix.kmp.icon.extended.Delete
+import top.yukonga.miuix.kmp.icon.extended.More
 import top.yukonga.miuix.kmp.icon.extended.Pause
 import top.yukonga.miuix.kmp.icon.extended.Play
-import top.yukonga.miuix.kmp.icon.extended.Refresh
+import top.yukonga.miuix.kmp.menu.OverlayIconDropdownMenu
 import top.yukonga.miuix.kmp.theme.LocalDismissState
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.overScrollVertical
 import top.yukonga.miuix.kmp.utils.scrollEndHaptic
 import top.yukonga.miuix.kmp.window.WindowDialog
 import com.github.ilife798.copyTextToClipboard
+import com.github.ilife798.data.model.HomeDeviceType
 import com.github.ilife798.data.viewmodel.AppViewModel
 import com.github.ilife798.showToast
 import com.github.ilife798.ui.theme.WindowBlurEffect
@@ -66,7 +71,7 @@ fun HomePage(viewModel: AppViewModel, onDeviceAddClick: () -> Unit = {}) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = "主页",
+                title = "首页",
                 modifier = Modifier.appBarBlur(blurBackdrop),
                 color = blurAppBarColor(blurBackdrop),
                 scrollBehavior = scrollBehavior
@@ -162,7 +167,11 @@ private fun formatMoney(value: Double): String {
 
 @Composable
 private fun DeviceCard(viewModel: AppViewModel, onDeviceAddClick: () -> Unit) {
-    val devices = viewModel.state.devices
+    val allDevices = viewModel.state.devices
+    val homeType = viewModel.homeDeviceType
+    val devices = remember(allDevices, homeType) {
+        allDevices.filter { HomeDeviceType.fromDeviceType(it.dtype) == homeType }
+    }
     val isLoggedIn = viewModel.state.account.appToken.isNotEmpty() || viewModel.state.account.token.isNotEmpty()
 
     // Toggle device dialog state
@@ -173,6 +182,18 @@ private fun DeviceCard(viewModel: AppViewModel, onDeviceAddClick: () -> Unit) {
     // Remove device dialog state
     var removeDeviceId by remember { mutableStateOf<String?>(null) }
     var removeDeviceName by remember { mutableStateOf("") }
+
+    val deviceTypeEntry = remember(viewModel.homeDeviceType) {
+        DropdownEntry(
+            items = HomeDeviceType.entries.map { type ->
+                DropdownItem(
+                    text = type.label,
+                    selected = viewModel.homeDeviceType == type,
+                    onClick = { viewModel.selectHomeDeviceType(type) }
+                )
+            }
+        )
+    }
 
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp)) {
@@ -189,19 +210,6 @@ private fun DeviceCard(viewModel: AppViewModel, onDeviceAddClick: () -> Unit) {
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     IconButton(
                         enabled = isLoggedIn,
-                        onClick = {
-                            viewModel.forceRefresh()
-                        }
-                    ) {
-                        Icon(
-                            imageVector = MiuixIcons.Refresh,
-                            contentDescription = "刷新",
-                            modifier = Modifier.size(20.dp),
-                            tint = if (isLoggedIn) MiuixTheme.colorScheme.onSurface else MiuixTheme.colorScheme.onSurface.copy(alpha = 0.3f)
-                        )
-                    }
-                    IconButton(
-                        enabled = isLoggedIn,
                         onClick = onDeviceAddClick
                     ) {
                         Icon(
@@ -211,12 +219,23 @@ private fun DeviceCard(viewModel: AppViewModel, onDeviceAddClick: () -> Unit) {
                             tint = if (isLoggedIn) MiuixTheme.colorScheme.onSurface else MiuixTheme.colorScheme.onSurface.copy(alpha = 0.3f)
                         )
                     }
+                    OverlayIconDropdownMenu(
+                        entry = deviceTypeEntry,
+                        enabled = isLoggedIn
+                    ) {
+                        Icon(
+                            imageVector = MiuixIcons.More,
+                            contentDescription = "选择设备类型",
+                            modifier = Modifier.size(20.dp),
+                            tint = if (isLoggedIn) MiuixTheme.colorScheme.onSurface else MiuixTheme.colorScheme.onSurface.copy(alpha = 0.3f)
+                        )
+                    }
                 }
             }
             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
             if (devices.isEmpty()) {
                 Text(
-                    text = if (!isLoggedIn) "请先登录" else "暂无设备",
+                    text = if (!isLoggedIn) "请先登录" else "暂无${homeType.label}设备",
                     style = MiuixTheme.textStyles.body2,
                     color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                     modifier = Modifier.padding(vertical = 8.dp)
@@ -230,9 +249,13 @@ private fun DeviceCard(viewModel: AppViewModel, onDeviceAddClick: () -> Unit) {
                         device = device,
                         isPolling = viewModel.pollingDeviceId == device.id,
                         onToggle = {
-                            toggleDeviceId = device.id
-                            toggleDeviceName = device.name.ifEmpty { device.id }
-                            toggleIsRunning = device.geneStatus != 99
+                            if (device.geneStatus != 99) {
+                                toggleDeviceId = device.id
+                                toggleDeviceName = device.name.ifEmpty { device.id }
+                                toggleIsRunning = true
+                            } else {
+                                viewModel.prepareStartDevice(device)
+                            }
                         },
                         onRemove = {
                             removeDeviceId = device.id
@@ -283,7 +306,108 @@ private fun DeviceCard(viewModel: AppViewModel, onDeviceAddClick: () -> Unit) {
         )
     }
 
-    // Remove device confirmation dialog
+    // 启动选项对话框
+    val pendingStart = viewModel.pendingStart
+    if (pendingStart != null) {
+        var selectedIndex by remember(pendingStart) { mutableStateOf(0) }
+        WindowDialog(
+            show = true,
+            onDismissRequest = { viewModel.cancelPendingStart() },
+            title = "启动设备",
+            content = {
+                WindowBlurEffect(useBlur = viewModel.state.appBlur)
+                val dismiss = LocalDismissState.current
+                Column {
+                    Text(
+                        text = "确定要启动 ${pendingStart.deviceName} 吗？",
+                        style = MiuixTheme.textStyles.body2,
+                        color = MiuixTheme.colorScheme.onSurface
+                    )
+                    val parts = pendingStart.options.parts
+                    if (parts.isNotEmpty()) {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        parts.forEachIndexed { index, option ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { selectedIndex = index }
+                                    .padding(vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                RadioButton(
+                                    selected = selectedIndex == index,
+                                    onClick = { selectedIndex = index }
+                                )
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = option.name.ifEmpty { "模式 ${option.mode}" },
+                                        style = MiuixTheme.textStyles.body2,
+                                        color = MiuixTheme.colorScheme.onSurface
+                                    )
+                                    val detail = buildList {
+                                        if (option.rate > 0.0) add("¥${formatMoney(option.rate)}")
+                                        if (option.maxT > 0) add("最长 ${option.maxT}")
+                                    }.joinToString(" · ")
+                                    if (detail.isNotEmpty()) {
+                                        Text(
+                                            text = detail,
+                                            style = MiuixTheme.textStyles.body2,
+                                            color = MiuixTheme.colorScheme.onSurfaceVariantSummary
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    } else if (pendingStart.options.subCount > 1) {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        repeat(pendingStart.options.subCount) { index ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { selectedIndex = index }
+                                    .padding(vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                RadioButton(
+                                    selected = selectedIndex == index,
+                                    onClick = { selectedIndex = index }
+                                )
+                                Text(
+                                    text = "通道 ${index + 1}",
+                                    style = MiuixTheme.textStyles.body2,
+                                    color = MiuixTheme.colorScheme.onSurface
+                                )
+                            }
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(24.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        TextButton(
+                            modifier = Modifier.weight(1f),
+                            onClick = { dismiss?.invoke() },
+                            text = "取消"
+                        )
+                        TextButton(
+                            modifier = Modifier.weight(1f),
+                            onClick = {
+                                viewModel.confirmPendingStart(selectedIndex)
+                                dismiss?.invoke()
+                            },
+                            text = "启动",
+                            colors = ButtonDefaults.textButtonColorsPrimary()
+                        )
+                    }
+                }
+            }
+        )
+    }
+
+    // 删除设备对话框
     if (removeDeviceId != null) {
         WindowDialog(
             show = true,

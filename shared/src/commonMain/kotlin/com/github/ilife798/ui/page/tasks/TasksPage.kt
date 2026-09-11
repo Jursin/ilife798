@@ -1,5 +1,6 @@
 package com.github.ilife798.ui.page.tasks
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -21,11 +22,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import com.github.ilife798.ui.theme.primaryButtonColors
 import top.yukonga.miuix.kmp.basic.Card
+import top.yukonga.miuix.kmp.basic.CardDefaults
 import top.yukonga.miuix.kmp.basic.HorizontalDivider
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
@@ -52,7 +55,7 @@ import com.github.ilife798.ui.theme.rememberAppBlurBackdrop
 import com.github.ilife798.util.getDayOfWeek
 
 @Composable
-fun TasksPage(viewModel: AppViewModel) {
+fun TasksPage(viewModel: AppViewModel, onLoginClick: (isAlipay: Boolean) -> Unit = {}) {
     val state = viewModel.state
     val missions = viewModel.missions
     val isLoading = viewModel.isLoading
@@ -203,6 +206,26 @@ fun TasksPage(viewModel: AppViewModel) {
                             modifier = Modifier.padding(vertical = 8.dp)
                         )
                     }
+                }
+            }
+
+            if (state.account.appToken.isNotEmpty() && !state.account.pointsLoginDone && state.taskLogs.isEmpty()) {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onLoginClick(true) },
+                    colors = CardDefaults.defaultColors(
+                        color = MiuixTheme.colorScheme.primaryContainer.copy(alpha = 0.25f),
+                        contentColor = MiuixTheme.colorScheme.onSurface
+                    )
+                ) {
+                    Text(
+                        text = "完成积分登录解锁更多任务。",
+                        style = MiuixTheme.textStyles.body2,
+                        color = MiuixTheme.colorScheme.primary,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.padding(16.dp)
+                    )
                 }
             }
 

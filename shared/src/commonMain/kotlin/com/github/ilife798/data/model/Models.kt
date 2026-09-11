@@ -19,7 +19,49 @@ data class Device(
     val name: String,
     val status: Int = 0,
     val geneStatus: Int = 0,
-    val deviceStatus: Int = 1
+    val deviceStatus: Int = 1,
+    val dtype: Int = 0
+)
+
+// 首页场景类型
+enum class HomeDeviceType(val label: String, val deviceType: Int) {
+    Laundry("洗烘", 10),
+    HairDrying("吹风", 20),
+    Drinking("饮水", 8),
+    Shower("淋浴", 6);
+
+    companion object {
+        fun fromDeviceType(dtype: Int): HomeDeviceType? =
+            entries.firstOrNull { it.deviceType == dtype }
+    }
+}
+
+// 设备可选项（来自 /ui/app/dev/status?more=true 的 bm.parts）
+@Serializable
+data class DeviceOption(
+    val mode: Int = -1,
+    val name: String = "",
+    val rate: Double = 0.0,
+    val maxT: Int = 0
+)
+
+// 货道（售货机/加液），对应 gs.items
+@Serializable
+data class DeviceGoods(val pos: Int = 0, val out: Int = 0)
+
+// 设备启动可选项集合
+@Serializable
+data class DeviceStartOptions(
+    val parts: List<DeviceOption> = emptyList(),
+    val subCount: Int = 0,
+    val goods: List<DeviceGoods> = emptyList()
+)
+
+// 待用户确认启动的设备（含可选项）
+data class DevicePendingStart(
+    val deviceId: String,
+    val deviceName: String,
+    val options: DeviceStartOptions
 )
 
 @Serializable

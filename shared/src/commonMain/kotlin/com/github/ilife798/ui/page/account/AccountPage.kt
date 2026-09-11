@@ -157,7 +157,7 @@ fun AccountPage(
                 )
             ) {
                 Text(
-                    text = "设备控制为空时点击弹出输入对话框，积分任务为空时点击进入积分登录页面。有值时点击设备控制/积分任务/用户 ID 复制对应值，长按设备控制/积分任务弹出输入框。\n完成积分登录可解锁更多任务。",
+                    text = "设备控制为空时点击弹出输入对话框，积分任务为空时点击进入积分登录页面。有值时点击设备控制/积分任务/用户 ID 复制对应值，长按设备控制/积分任务弹出输入框。",
                     style = MiuixTheme.textStyles.body2,
                     color = MiuixTheme.colorScheme.primary,
                     fontWeight = FontWeight.SemiBold,

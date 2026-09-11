@@ -3,10 +3,8 @@ package com.github.ilife798.ui.page.score
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
@@ -29,13 +27,15 @@ import top.yukonga.miuix.kmp.basic.InfiniteProgressIndicator
 import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
 import top.yukonga.miuix.kmp.basic.PullToRefresh
 import top.yukonga.miuix.kmp.basic.Scaffold
-import top.yukonga.miuix.kmp.basic.TabRowDefaults
-import top.yukonga.miuix.kmp.basic.TabRowWithContour
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TopAppBar
+import top.yukonga.miuix.kmp.basic.DropdownEntry
+import top.yukonga.miuix.kmp.basic.DropdownItem
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import com.github.ilife798.ui.theme.captureForBlur
 import top.yukonga.miuix.kmp.icon.extended.Back
+import top.yukonga.miuix.kmp.icon.extended.More
+import top.yukonga.miuix.kmp.menu.OverlayIconDropdownMenu
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.overScrollVertical
 import top.yukonga.miuix.kmp.utils.scrollEndHaptic
@@ -56,6 +56,18 @@ fun ScorePage(viewModel: AppViewModel, onBack: () -> Unit) {
     val scrollBehavior = MiuixScrollBehavior()
     val blurBackdrop = rememberAppBlurBackdrop(state.appBlur)
     val scrollState = rememberScrollState()
+
+    val scoreFilterEntry = remember(viewModel.scoreFilter) {
+        DropdownEntry(
+            items = ScoreFilter.entries.map { filter ->
+                DropdownItem(
+                    text = scoreFilterLabel(filter),
+                    selected = viewModel.scoreFilter == filter,
+                    onClick = { viewModel.selectScoreFilter(filter) }
+                )
+            }
+        )
+    }
 
     LaunchedEffect(Unit) {
         if (state.account.appToken.isNotEmpty() || state.account.token.isNotEmpty()) {
@@ -88,6 +100,14 @@ fun ScorePage(viewModel: AppViewModel, onBack: () -> Unit) {
                         Icon(
                             imageVector = MiuixIcons.Back,
                             contentDescription = "返回"
+                        )
+                    }
+                },
+                actions = {
+                    OverlayIconDropdownMenu(entry = scoreFilterEntry) {
+                        Icon(
+                            imageVector = MiuixIcons.More,
+                            contentDescription = "选择积分类型"
                         )
                     }
                 }
@@ -151,22 +171,6 @@ fun ScorePage(viewModel: AppViewModel, onBack: () -> Unit) {
                             color = MiuixTheme.colorScheme.onSurface
                         )
                         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                        TabRowWithContour(
-                            tabs = listOf("全部", "收入", "支出"),
-                            selectedTabIndex = when (viewModel.scoreFilter) {
-                                ScoreFilter.All -> 0
-                                ScoreFilter.Income -> 1
-                                ScoreFilter.Expense -> 2
-                            },
-                            onTabSelected = { index -> viewModel.selectScoreFilter(ScoreFilter.entries[index]) },
-                            colors = TabRowDefaults.tabRowColors(
-                                backgroundColor = MiuixTheme.colorScheme.surfaceContainerHigh,
-                                contentColor = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                                selectedBackgroundColor = MiuixTheme.colorScheme.primary,
-                                selectedContentColor = MiuixTheme.colorScheme.onPrimary
-                            )
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
                         val isLoggedIn = state.account.appToken.isNotEmpty() || state.account.token.isNotEmpty()
                         if (scores.isEmpty()) {
                             Text(
@@ -277,4 +281,10 @@ private fun formatTwoDecimals(value: Double): String {
     val intPart = scaled / 100
     val frac = (scaled % 100).toString().padStart(2, '0')
     return (if (negative) "-" else "") + "$intPart.$frac"
+}
+
+private fun scoreFilterLabel(filter: ScoreFilter): String = when (filter) {
+    ScoreFilter.All -> "全部"
+    ScoreFilter.Income -> "收入"
+    ScoreFilter.Expense -> "支出"
 }

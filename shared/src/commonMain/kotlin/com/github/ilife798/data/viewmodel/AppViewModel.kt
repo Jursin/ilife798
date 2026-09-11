@@ -13,7 +13,11 @@ import com.github.ilife798.data.api.ScoreDto
 import com.github.ilife798.data.model.Account
 import com.github.ilife798.data.model.AccountInfo
 import com.github.ilife798.data.model.AppState
+import com.github.ilife798.data.model.BillRecord
 import com.github.ilife798.data.model.Device
+import com.github.ilife798.data.model.DevicePendingStart
+import com.github.ilife798.data.model.DeviceStartOptions
+import com.github.ilife798.data.model.HomeDeviceType
 import com.github.ilife798.data.model.MissionInfo
 import com.github.ilife798.data.model.PointsInfo
 import com.github.ilife798.data.model.RechargeProduct
@@ -58,6 +62,9 @@ private const val BILL_PAGE_SIZE = 20
 private const val BILL_STATUS = 3
 private const val SPENDING_MAX_PAGES = 10
 
+// 无模式/多通道的设备类型（水表/淋浴/直饮水），启动时无需拉取可选项
+private val SIMPLE_DEVICE_TYPES = setOf(5, 6, 8)
+
 // 二维码类型
 private const val QR_TYPE_DEVICE = 3
 private const val QR_TYPE_DOOR_LOCK = 8
@@ -100,6 +107,7 @@ class AppViewModel : ViewModel() {
 
     init {
         loadSettings()
+        loadHomeDeviceTypePref()
         loadSavedAccount()
     }
 
@@ -187,7 +195,7 @@ class AppViewModel : ViewModel() {
         }
     }
 
-    // 账号信息页手动填写凭据（如导入官方 token）：校验有效性、渠道与同一账户
+    // 账号信息页手动填写凭据（：校验有效性、渠道与同一账户
     fun updateAccountField(field: String, value: String) {
         val input = value.trim()
         if (input.isEmpty()) return
@@ -264,7 +272,7 @@ class AppViewModel : ViewModel() {
         showToast(if (field == "appToken") "已清空设备控制" else "已清空积分任务")
     }
 
-    // --- Captcha ---
+    // 验证码
     var captchaKey by mutableStateOf("")
         private set
 
@@ -274,10 +282,10 @@ class AppViewModel : ViewModel() {
     var captchaLoaded by mutableStateOf(false)
         private set
 
-    fun loadCaptcha() {
+    fun loadCaptcha(clearError: Boolean = true) {
         viewModelScope.launch {
             isLoading = true
-            errorMessage = null
+            if (clearError) errorMessage = null
             smsSent = false
             try {
                 val key = api.newCaptchaKey()
@@ -293,7 +301,7 @@ class AppViewModel : ViewModel() {
         }
     }
 
-    // --- Login ---
+    // 登录
     var smsSent by mutableStateOf(false)
         private set
 
@@ -316,11 +324,13 @@ class AppViewModel : ViewModel() {
                     val msg = obj["msg"]?.jsonPrimitive?.content ?: "发送验证码失败"
                     errorMessage = msg
                     showToast(msg)
+                    loadCaptcha(clearError = false)
                 }
             } catch (e: Exception) {
                 val msg = "发送验证码失败: ${e.message}"
                 errorMessage = msg
                 showToast(msg)
+                loadCaptcha(clearError = false)
             } finally {
                 isLoading = false
             }
@@ -359,6 +369,7 @@ class AppViewModel : ViewModel() {
                     loadAccountInfo()
                     if (isAlipay) loadScoreInfo()
                     loadSpendingStats()
+                    loadMissions()
                     resetCaptcha()
                     loginType = null
                     saveAccount()
@@ -391,6 +402,8 @@ class AppViewModel : ViewModel() {
         billLoadingMore = false
         billPage = 0
         billLoadToken = ""
+        billStatus = BILL_STATUS
+        billCache = mutableMapOf()
         lastMissionsLoadTime = 0L
         lastScoreLoadTime = 0L
         lastAccountLoadTime = 0L
@@ -436,7 +449,42 @@ class AppViewModel : ViewModel() {
         }
     }
 
-    // --- Devices ---
+    // 选择的设备类型，默认取已收藏设备的类型（按 洗烘/吹风/饮水/淋浴 顺序取最上），
+    // 用户手动选择后持久化，下次进入或重启沿用
+    var homeDeviceType by mutableStateOf(HomeDeviceType.Shower)
+        private set
+    private var homeDeviceTypeExplicit = false
+
+    private fun loadHomeDeviceTypePref() {
+        try {
+            val saved = AppStorage.instance.getString(StorageKeys.HOME_DEVICE_TYPE)
+            val type = HomeDeviceType.entries.firstOrNull { it.name == saved } ?: return
+            homeDeviceType = type
+            homeDeviceTypeExplicit = true
+        } catch (e: Exception) {
+            logError("loadHomeDeviceTypePref", e)
+        }
+    }
+
+    fun selectHomeDeviceType(type: HomeDeviceType) {
+        if (homeDeviceType == type && homeDeviceTypeExplicit) return
+        homeDeviceType = type
+        homeDeviceTypeExplicit = true
+        try {
+            AppStorage.instance.saveString(StorageKeys.HOME_DEVICE_TYPE, type.name)
+        } catch (e: Exception) {
+            logError("selectHomeDeviceType", e)
+        }
+    }
+
+    private fun inferHomeDeviceType(devices: List<Device>) {
+        if (homeDeviceTypeExplicit) return
+        val dtypes = devices.map { it.dtype }.filter { it != 0 }.toSet()
+        if (dtypes.isEmpty()) return
+        HomeDeviceType.entries.firstOrNull { it.deviceType in dtypes }
+            ?.let { homeDeviceType = it }
+    }
+
     fun loadDeviceInfo(force: Boolean = false): Job? {
         val useApp = state.account.appToken.isNotEmpty()
         val token = if (useApp) state.account.appToken else state.account.token
@@ -463,13 +511,15 @@ class AppViewModel : ViewModel() {
                         name = dto.name,
                         status = dto.status,
                         geneStatus = realStatus?.geneStatus ?: dto.geneStatus,
-                        deviceStatus = realStatus?.deviceStatus ?: 1
+                        deviceStatus = realStatus?.deviceStatus ?: 1,
+                        dtype = dto.dtype
                     )
                 }
                 state = state.copy(
                     devices = updatedDevices,
                     account = state.account.copy(uid = master.accountId.ifEmpty { state.account.uid })
                 )
+                inferHomeDeviceType(updatedDevices)
             } catch (e: Exception) {
                 logError("loadDeviceInfo", e)
             }
@@ -508,7 +558,11 @@ class AppViewModel : ViewModel() {
                 val result = api.devFavo(token, id, remove = false)
                 if (result.success) {
                     showToast("设备已添加")
-                    loadDeviceInfo(force = true)
+                    loadDeviceInfo(force = true)?.join()
+                    // 添加成功后自动切换到该设备对应的类型
+                    state.devices.firstOrNull { it.id == id }
+                        ?.let { HomeDeviceType.fromDeviceType(it.dtype) }
+                        ?.let { selectHomeDeviceType(it) }
                 }
             } catch (e: Exception) {
                 logError("addDevice", e)
@@ -586,7 +640,56 @@ class AppViewModel : ViewModel() {
         }
     }
 
-    fun toggleDeviceRunning(deviceId: String) {
+    // 启动前查询设备可选项；有选项则交由 UI 弹窗选择，无选项直接启动
+    var pendingStart by mutableStateOf<DevicePendingStart?>(null)
+        private set
+
+    fun prepareStartDevice(device: Device) {
+        val name = device.name.ifEmpty { device.id }
+        // 水表(5)/淋浴(6)/直饮水(8) 无模式/多通道，免请求直接弹确认
+        if (device.dtype in SIMPLE_DEVICE_TYPES) {
+            pendingStart = DevicePendingStart(device.id, name, DeviceStartOptions())
+            return
+        }
+        val useApp = state.account.appToken.isNotEmpty()
+        val token = if (useApp) state.account.appToken else state.account.token
+        val appType = if (useApp) "1,1" else "1,5"
+        if (token.isEmpty()) return
+        viewModelScope.launch {
+            val options = try {
+                api.getDeviceStartOptions(token, device.id, appType)
+            } catch (e: Exception) {
+                logError("getDeviceStartOptions", e)
+                DeviceStartOptions()
+            }
+            pendingStart = DevicePendingStart(device.id, name, options)
+        }
+    }
+
+    fun cancelPendingStart() {
+        pendingStart = null
+    }
+
+    fun confirmPendingStart(selectedIndex: Int) {
+        val pending = pendingStart ?: return
+        pendingStart = null
+        toggleDeviceRunning(pending.deviceId, buildStartArgs(pending.options, selectedIndex))
+    }
+
+    // 组装 /dev/start 的 args：优先模式(parts)，其次通道(subs)
+    private fun buildStartArgs(options: DeviceStartOptions, selectedIndex: Int): String {
+        if (options.parts.isNotEmpty()) {
+            val part = options.parts.getOrNull(selectedIndex) ?: return ""
+            val ext = options.goods.joinToString(",") { """{"pos":${it.pos},"out":${it.out}}""" }
+            return """{"mode":${part.mode},"ext":[$ext]}"""
+        }
+        if (options.subCount > 1) {
+            return """{"pos":$selectedIndex,"mode":null}"""
+        }
+        return ""
+    }
+
+    fun toggleDeviceRunning(deviceId: String, args: String = "") {
         val useApp = state.account.appToken.isNotEmpty()
         val token = if (useApp) state.account.appToken else state.account.token
         val appType = if (useApp) "1,1" else "1,5"
@@ -600,18 +703,18 @@ class AppViewModel : ViewModel() {
                 val result = if (starting) {
                     api.setUseScore(token, useScore = 1, appType = appType)
                     // 优先钱袋支付（91），余额不足等失败时自动切换支付宝免密支付（21）
-                    val wallet = api.devStart(token, deviceId, appType, ptype = PAY_TYPE_WALLET, reportError = false)
+                    val wallet = api.devStart(token, deviceId, appType, ptype = PAY_TYPE_WALLET, args = args, reportError = false)
                     if (wallet.success) {
                         wallet
                     } else {
-                        api.devStart(token, deviceId, appType, ptype = PAY_TYPE_ALIPAY)
+                        api.devStart(token, deviceId, appType, ptype = PAY_TYPE_ALIPAY, args = args)
                     }
                 } else {
                     api.devEnd(token, deviceId, appType)
                 }
                 if (!result.success) return@launch
                 showToast(if (starting) "设备已启动" else "设备已停止")
-                // 第一轮：5次 × 2.5秒（官方参数）
+                // 第一轮：5次 × 2.5秒
                 var newStatus: DevStatusResult? = null
                 var attempt = 0
                 while (attempt < 5) {
@@ -649,7 +752,7 @@ class AppViewModel : ViewModel() {
         }
     }
 
-    // --- Score/Tasks ---
+    // 积分/任务
     var missions by mutableStateOf<List<MissionInfo>>(emptyList())
         private set
 
@@ -677,7 +780,7 @@ class AppViewModel : ViewModel() {
 
     private fun toScoreRecord(dto: ScoreDto) = ScoreRecord(score = dto.score, name = dto.name, time = dto.time)
 
-    // 积分数据读取优先用设备登录凭据（appToken），与设备/账单保持一致
+    // 积分数据读取优先用设备登录凭据（appToken）
     private fun scoreToken(): String = state.account.appToken.ifEmpty { state.account.token }
 
     private fun emptyScoreLists(): Map<ScoreFilter, ScoreListState> =
@@ -802,11 +905,25 @@ class AppViewModel : ViewModel() {
         }
     }
 
-    // --- Wallet & Bills ---
+    // 钱包＆账单
     var billLoadingMore by mutableStateOf(false)
         private set
     var billHasMore by mutableStateOf(false)
         private set
+
+    // 账单类型（1 未付款 / 3 已付款 / 2 待确认 / 4 付款失败 / 9 已取消）
+    var billStatus by mutableStateOf(BILL_STATUS)
+        private set
+
+    private data class BillCacheEntry(
+        val records: List<BillRecord>,
+        val page: Int,
+        val hasMore: Boolean
+    )
+
+    // 各账单类型的数据缓存，进入页面/刷新时清空，切换类型时命中缓存则不重复请求
+    private var billCache = mutableMapOf<Int, BillCacheEntry>()
+
     private var billPage = 0
     private var billLoadToken = ""
 
@@ -876,17 +993,41 @@ class AppViewModel : ViewModel() {
     }
 
     private fun loadBillFirstPage(token: String): Job {
+        val status = billStatus
         return viewModelScope.launch {
             try {
-                val result = api.getBillList(token, page = 0, size = BILL_PAGE_SIZE, status = BILL_STATUS)
+                val result = api.getBillList(token, page = 0, size = BILL_PAGE_SIZE, status = status)
                 if (walletToken() != token) return@launch
+                val hasMore = result.total > result.records.size
+                billCache[status] = BillCacheEntry(result.records, 0, hasMore)
+                // 请求期间已切换到其它类型，仅写入缓存
+                if (status != billStatus) return@launch
                 billLoadToken = token
                 billPage = 0
-                billHasMore = result.total > result.records.size
+                billHasMore = hasMore
                 state = state.copy(billRecords = result.records)
             } catch (e: Exception) {
                 logError("loadBillFirstPage", e)
             }
+        }
+    }
+
+    fun selectBillStatus(status: Int) {
+        if (billStatus == status) return
+        billStatus = status
+        billLoadingMore = false
+        val cached = billCache[status]
+        if (cached != null) {
+            billLoadToken = walletToken()
+            billPage = cached.page
+            billHasMore = cached.hasMore
+            state = state.copy(billRecords = cached.records)
+        } else {
+            billLoadToken = ""
+            billPage = 0
+            billHasMore = false
+            state = state.copy(billRecords = emptyList())
+            loadBillsNoCooldown()
         }
     }
 
@@ -898,18 +1039,21 @@ class AppViewModel : ViewModel() {
 
     fun loadMoreBills() {
         val token = walletToken()
+        val status = billStatus
         if (token.isEmpty() || billLoadingMore || !billHasMore || billLoadToken != token) return
         billLoadingMore = true
         viewModelScope.launch {
             try {
                 val nextPage = billPage + 1
-                val result = api.getBillList(token, page = nextPage, size = BILL_PAGE_SIZE, status = BILL_STATUS)
-                if (walletToken() != token) return@launch
+                val result = api.getBillList(token, page = nextPage, size = BILL_PAGE_SIZE, status = status)
+                if (walletToken() != token || status != billStatus) return@launch
                 billPage = nextPage
                 val seen = state.billRecords.map { it.id }.toMutableSet()
                 val appended = result.records.filter { it.id.isEmpty() || seen.add(it.id) }
-                state = state.copy(billRecords = state.billRecords + appended)
+                val newRecords = state.billRecords + appended
                 billHasMore = (billPage + 1) * BILL_PAGE_SIZE < result.total
+                billCache[status] = BillCacheEntry(newRecords, billPage, billHasMore)
+                state = state.copy(billRecords = newRecords)
             } catch (e: Exception) {
                 logError("loadMoreBills", e)
             } finally {
@@ -918,7 +1062,15 @@ class AppViewModel : ViewModel() {
         }
     }
 
+    // 进入我的账单页：重置为默认（已付款），清空缓存后重新请求
     fun refreshBillPage() {
+        billStatus = BILL_STATUS
+        billCache = mutableMapOf()
+        billPage = 0
+        billHasMore = false
+        billLoadingMore = false
+        billLoadToken = ""
+        state = state.copy(billRecords = emptyList())
         loadWallet()
         loadBillsNoCooldown()
     }
@@ -929,6 +1081,8 @@ class AppViewModel : ViewModel() {
     fun refreshBills() {
         if (billRefreshing) return
         billRefreshing = true
+        // 下拉刷新：清空缓存后重新请求当前类型
+        billCache = mutableMapOf()
         viewModelScope.launch {
             try {
                 listOfNotNull(loadWallet(), loadBillsNoCooldown()).joinAll()
@@ -1042,7 +1196,7 @@ class AppViewModel : ViewModel() {
         }
     }
 
-    // --- Refund ---
+    // 退款
     var refundSubmitting by mutableStateOf(false)
         private set
 
@@ -1259,7 +1413,7 @@ class AppViewModel : ViewModel() {
                     }
                 }
 
-                // Missions - use dailyCompleted from limits[] instead of score-lst
+                // 任务
                 val validMissions = missionList.filter { !it.isDailySignin && it.limit > 0 && it.score > 0 && it.sourceToken.isNotEmpty() }
                 addTaskLog("共 ${validMissions.size} 个可执行任务")
                 var executed = 0
@@ -1289,7 +1443,6 @@ class AppViewModel : ViewModel() {
                             executed++
                             gained += mission.score
                             addTaskLog("[${mission.name}] ($round/$maxCount) 成功 +${mission.score}分")
-                            // Update dailyCompleted immediately so UI reflects it
                             missions = missions.map {
                                 if (it.adId == mission.adId) it.copy(dailyCompleted = it.dailyCompleted + 1) else it
                             }
@@ -1347,7 +1500,7 @@ class AppViewModel : ViewModel() {
         state = state.copy(taskLogs = state.taskLogs + "[$time] $message")
     }
 
-    // --- Settings ---
+    // 设置
     fun setDynamicColor(enabled: Boolean) {
         state = state.copy(dynamicColor = enabled)
         AppStorage.instance.saveBoolean(StorageKeys.DYNAMIC_COLOR, enabled)
@@ -1400,19 +1553,6 @@ class AppViewModel : ViewModel() {
                 homeRefreshing = false
             }
         }
-    }
-
-    fun forceRefresh() {
-        lastDeviceLoadTime = 0L
-        lastScoreLoadTime = 0L
-        lastMissionsLoadTime = 0L
-        lastAccountLoadTime = 0L
-        lastSpendingLoadTime = 0L
-        loadDeviceInfo(force = true)
-        loadAccountInfo()
-        loadScoreInfo()
-        loadSpendingStats()
-        showToast("已刷新")
     }
 }
 

@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -38,6 +39,7 @@ import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import com.github.ilife798.ui.theme.primaryButtonColors
 import top.yukonga.miuix.kmp.basic.Card
+import top.yukonga.miuix.kmp.basic.CardDefaults
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
@@ -55,12 +57,14 @@ import top.yukonga.miuix.kmp.icon.extended.Remove
 import top.yukonga.miuix.kmp.preference.OverlayDropdownPreference
 import top.yukonga.miuix.kmp.shader.isRuntimeShaderSupported
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+import top.yukonga.miuix.kmp.theme.LocalDismissState
 import top.yukonga.miuix.kmp.utils.overScrollVertical
 import top.yukonga.miuix.kmp.utils.scrollEndHaptic
 import top.yukonga.miuix.kmp.window.WindowDialog
 import com.github.ilife798.data.model.ThemeMode
 import com.github.ilife798.data.viewmodel.AppViewModel
 import com.github.ilife798.getAppVersion
+import com.github.ilife798.getAppVersionCode
 import com.github.ilife798.ui.theme.WindowBlurEffect
 import com.github.ilife798.ui.theme.appBarBlur
 import com.github.ilife798.ui.theme.blurAppBarColor
@@ -248,7 +252,7 @@ private fun AccountSection(
             title = "退出登录",
             content = {
                 WindowBlurEffect(useBlur = viewModel.state.appBlur)
-                val dismiss = top.yukonga.miuix.kmp.theme.LocalDismissState.current
+                val dismiss = LocalDismissState.current
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(text = "确定要退出登录吗？")
                     Spacer(modifier = Modifier.height(24.dp))
@@ -293,6 +297,7 @@ private fun SettingsSection(viewModel: AppViewModel, onLicenseClick: () -> Unit)
             }
         )
     }
+    var showDisclaimerDialog by remember { mutableStateOf(false) }
 
     SmallTitle(text = "设置", insideMargin = PaddingValues(12.dp, 8.dp))
     Card(modifier = Modifier.fillMaxWidth()) {
@@ -360,7 +365,7 @@ private fun SettingsSection(viewModel: AppViewModel, onLicenseClick: () -> Unit)
         Column {
             BasicComponent(
                 title = "版本",
-                summary = getAppVersion()
+                summary = "${getAppVersion()}（${getAppVersionCode()}）"
             )
             BasicComponent(
                 title = "查看源代码",
@@ -373,10 +378,75 @@ private fun SettingsSection(viewModel: AppViewModel, onLicenseClick: () -> Unit)
                 onClick = onLicenseClick
             )
             BasicComponent(
+                title = "免责声明",
+                summary = "查看使用本应用的免责声明",
+                onClick = { showDisclaimerDialog = true }
+            )
+            BasicComponent(
                 title = "赞助支持",
                 summary = "在爱发电赞助我",
                 onClick = { uriHandler.openUri("https://afdian.com/a/jursin") }
             )
         }
     }
+
+    if (showDisclaimerDialog) {
+        WindowDialog(
+            show = true,
+            onDismissRequest = { showDisclaimerDialog = false },
+            title = "免责声明",
+            content = {
+                WindowBlurEffect(useBlur = state.appBlur)
+                val dismiss = LocalDismissState.current
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 420.dp)
+                ) {
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f, fill = false),
+                        colors = CardDefaults.defaultColors(
+                            color = MiuixTheme.colorScheme.surfaceContainerHighest
+                        )
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .verticalScroll(rememberScrollState())
+                                .padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            disclaimerLines.forEach { line ->
+                                Text(
+                                    text = "• $line",
+                                    style = MiuixTheme.textStyles.body2,
+                                    color = MiuixTheme.colorScheme.onSurfaceContainer
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(24.dp))
+
+                    Button(
+                        modifier = Modifier.fillMaxWidth(),
+                        onClick = { dismiss?.invoke() },
+                        colors = ButtonDefaults.buttonColorsPrimary()
+                    ) {
+                        Text(text = "了解")
+                    }
+                }
+            }
+        )
+    }
 }
+
+private val disclaimerLines = listOf(
+    "本项目非官方项目，与慧生活798服务提供方无任何联系。",
+    "本项目仅供学习和研究使用，不用于商业目的。",
+    "请在本应用上仅使用本人有权访问的账户和设备，并遵守相关服务协议。",
+    "你应了解自动运行积分任务存在被官方标记、拉黑甚至追究的风险，因使用本应用造成严重后果的由使用者自行承担，本项目概不负责。",
+    "你应了解官方可能会变更接口或相关认证方式，本项目不保证持续可用性，不一定及时通知或修复。"
+)

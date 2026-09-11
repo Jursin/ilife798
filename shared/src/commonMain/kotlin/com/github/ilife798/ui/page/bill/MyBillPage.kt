@@ -48,7 +48,9 @@ import top.yukonga.miuix.kmp.basic.TopAppBar
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Back
 import top.yukonga.miuix.kmp.icon.extended.BankCards
+import top.yukonga.miuix.kmp.icon.extended.More
 import top.yukonga.miuix.kmp.menu.OverlayDropdownMenu
+import top.yukonga.miuix.kmp.menu.OverlayIconDropdownMenu
 import top.yukonga.miuix.kmp.basic.DropdownEntry
 import top.yukonga.miuix.kmp.basic.DropdownItem
 import top.yukonga.miuix.kmp.theme.LocalDismissState
@@ -76,6 +78,17 @@ private const val LOAD_MORE_THRESHOLD_PX = 200
 
 private enum class BillPanel { Records, Recharge, Refund }
 
+// 类型分类（status）
+private data class BillStatusOption(val status: Int, val label: String)
+
+private val billStatusOptions = listOf(
+    BillStatusOption(1, "未付款"),
+    BillStatusOption(3, "已付款"),
+    BillStatusOption(2, "待确认"),
+    BillStatusOption(4, "付款失败"),
+    BillStatusOption(9, "已取消")
+)
+
 @Composable
 fun MyBillPage(viewModel: AppViewModel, onBack: () -> Unit) {
     val state = viewModel.state
@@ -89,6 +102,18 @@ fun MyBillPage(viewModel: AppViewModel, onBack: () -> Unit) {
     val scope = rememberCoroutineScope()
     var selectedProductId by remember { mutableStateOf<String?>(null) }
     var showRefundDialog by remember { mutableStateOf(false) }
+
+    val billStatusEntry = remember(viewModel.billStatus) {
+        DropdownEntry(
+            items = billStatusOptions.map { option ->
+                DropdownItem(
+                    text = option.label,
+                    selected = option.status == viewModel.billStatus,
+                    onClick = { viewModel.selectBillStatus(option.status) }
+                )
+            }
+        )
+    }
 
     LaunchedEffect(Unit) {
         if (state.account.appToken.isNotEmpty() || state.account.token.isNotEmpty()) {
@@ -112,6 +137,9 @@ fun MyBillPage(viewModel: AppViewModel, onBack: () -> Unit) {
             viewModel.loadRechargeProducts()
         }
     }
+    LaunchedEffect(viewModel.billStatus) {
+        scrollState.animateScrollTo(0)
+    }
 
     Scaffold(
         topBar = {
@@ -125,6 +153,14 @@ fun MyBillPage(viewModel: AppViewModel, onBack: () -> Unit) {
                         Icon(
                             imageVector = MiuixIcons.Back,
                             contentDescription = "返回"
+                        )
+                    }
+                },
+                actions = {
+                    OverlayIconDropdownMenu(entry = billStatusEntry) {
+                        Icon(
+                            imageVector = MiuixIcons.More,
+                            contentDescription = "选择账单类型"
                         )
                     }
                 }
