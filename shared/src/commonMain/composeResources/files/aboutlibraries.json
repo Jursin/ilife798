@@ -2274,7 +2274,7 @@
         },
         {
             "uniqueId": "com.google.zxing:core",
-            "artifactVersion": "3.5.3",
+            "artifactVersion": "3.5.4",
             "name": "ZXing Core",
             "description": "Core barcode encoding/decoding library",
             "website": "https://github.com/zxing/zxing/core",
