@@ -1,6 +1,8 @@
 package com.github.ilife798.ui.page.home
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
@@ -15,6 +17,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
@@ -23,6 +26,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Card
@@ -51,6 +55,8 @@ import top.yukonga.miuix.kmp.utils.overScrollVertical
 import top.yukonga.miuix.kmp.utils.scrollEndHaptic
 import top.yukonga.miuix.kmp.window.WindowDialog
 import com.github.ilife798.copyTextToClipboard
+import com.github.ilife798.DeviceTile
+import com.github.ilife798.DeviceTileResult
 import com.github.ilife798.data.model.HomeDeviceType
 import com.github.ilife798.data.viewmodel.AppViewModel
 import com.github.ilife798.showToast
@@ -59,6 +65,7 @@ import com.github.ilife798.ui.theme.appBarBlur
 import com.github.ilife798.ui.theme.blurAppBarColor
 import com.github.ilife798.ui.theme.captureForBlur
 import com.github.ilife798.ui.theme.rememberAppBlurBackdrop
+import top.yukonga.miuix.kmp.basic.CardDefaults
 import kotlin.math.abs
 import kotlin.math.round
 
@@ -183,6 +190,28 @@ private fun DeviceCard(viewModel: AppViewModel, onDeviceAddClick: () -> Unit) {
     var removeDeviceId by remember { mutableStateOf<String?>(null) }
     var removeDeviceName by remember { mutableStateOf("") }
 
+    // Create quick-settings tile dialog state
+    var tileDeviceId by remember { mutableStateOf<String?>(null) }
+    var tileDeviceName by remember { mutableStateOf("") }
+
+    // 快捷设置图块点击：定位到对应设备并触发“启动按钮”逻辑，停在对话框
+    val externalDeviceId = viewModel.pendingExternalDeviceId
+    LaunchedEffect(externalDeviceId, allDevices) {
+        val id = externalDeviceId ?: return@LaunchedEffect
+        val device = allDevices.firstOrNull { it.id == id } ?: return@LaunchedEffect
+        HomeDeviceType.fromDeviceType(device.dtype)?.let { type ->
+            if (viewModel.homeDeviceType != type) viewModel.selectHomeDeviceType(type)
+        }
+        if (device.geneStatus != 99) {
+            toggleDeviceId = device.id
+            toggleDeviceName = device.name.ifEmpty { device.id }
+            toggleIsRunning = true
+        } else {
+            viewModel.prepareStartDevice(device)
+        }
+        viewModel.consumeExternalDeviceStart()
+    }
+
     val deviceTypeEntry = remember(viewModel.homeDeviceType) {
         DropdownEntry(
             items = HomeDeviceType.entries.map { type ->
@@ -260,11 +289,31 @@ private fun DeviceCard(viewModel: AppViewModel, onDeviceAddClick: () -> Unit) {
                         onRemove = {
                             removeDeviceId = device.id
                             removeDeviceName = device.name.ifEmpty { device.id }
+                        },
+                        onLongPress = {
+                            tileDeviceId = device.id
+                            tileDeviceName = device.name.ifEmpty { device.id }
                         }
                     )
                 }
             }
         }
+    }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.defaultColors(
+            color = MiuixTheme.colorScheme.primaryContainer.copy(alpha = 0.25f),
+            contentColor = MiuixTheme.colorScheme.onSurface
+        )
+    ) {
+        Text(
+            text = "长按设备创建快捷设置图块。",
+            style = MiuixTheme.textStyles.body2,
+            color = MiuixTheme.colorScheme.primary,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.padding(16.dp)
+        )
     }
 
     // Toggle device confirmation dialog
@@ -317,10 +366,9 @@ private fun DeviceCard(viewModel: AppViewModel, onDeviceAddClick: () -> Unit) {
             content = {
                 WindowBlurEffect(useBlur = viewModel.state.appBlur)
                 val dismiss = LocalDismissState.current
-                Column {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(
                         text = "确定要启动 ${pendingStart.deviceName} 吗？",
-                        style = MiuixTheme.textStyles.body2,
                         color = MiuixTheme.colorScheme.onSurface
                     )
                     val parts = pendingStart.options.parts
@@ -444,14 +492,64 @@ private fun DeviceCard(viewModel: AppViewModel, onDeviceAddClick: () -> Unit) {
             }
         )
     }
+
+    // 创建设备快捷设置图块对话框
+    if (tileDeviceId != null) {
+        WindowDialog(
+            show = true,
+            onDismissRequest = { tileDeviceId = null },
+            title = "创建设备快捷设置图块",
+            content = {
+                WindowBlurEffect(useBlur = viewModel.state.appBlur)
+                val dismiss = LocalDismissState.current
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(text = "确定要创建设备快捷设置图块吗？")
+                    Spacer(modifier = Modifier.height(24.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        TextButton(
+                            modifier = Modifier.weight(1f),
+                            onClick = { dismiss?.invoke() },
+                            text = "取消"
+                        )
+                        TextButton(
+                            modifier = Modifier.weight(1f),
+                            onClick = {
+                                val id = tileDeviceId
+                                if (id != null) {
+                                    DeviceTile.bind(id, tileDeviceName) { result ->
+                                        showToast(
+                                            when (result) {
+                                                DeviceTileResult.ADDED -> "已添加设备快捷设置图块"
+                                                DeviceTileResult.ALREADY_ADDED -> "图块已存在，已更新为当前设备"
+                                                DeviceTileResult.UNSUPPORTED -> "请在快捷设置面板中手动添加图块"
+                                                DeviceTileResult.FAILED -> "创建失败"
+                                            }
+                                        )
+                                    }
+                                }
+                                dismiss?.invoke()
+                            },
+                            text = "确定",
+                            colors = ButtonDefaults.textButtonColorsPrimary()
+                        )
+                    }
+                }
+            }
+        )
+    }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun DeviceItem(
     device: com.github.ilife798.data.model.Device,
     isPolling: Boolean,
     onToggle: () -> Unit,
-    onRemove: () -> Unit
+    onRemove: () -> Unit,
+    onLongPress: () -> Unit
 ) {
     val isRunning = device.geneStatus != 99
     val isOffline = device.deviceStatus == 0
@@ -459,10 +557,13 @@ private fun DeviceItem(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable {
-                if (copyTextToClipboard(device.id)) showToast("已复制设备编号")
-                else showToast("复制失败")
-            }
+            .combinedClickable(
+                onClick = {
+                    if (copyTextToClipboard(device.id)) showToast("已复制设备编号")
+                    else showToast("复制失败")
+                },
+                onLongClick = onLongPress
+            )
             .padding(vertical = 8.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically

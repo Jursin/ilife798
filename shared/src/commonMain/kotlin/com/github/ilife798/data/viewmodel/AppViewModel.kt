@@ -644,6 +644,18 @@ class AppViewModel : ViewModel() {
     var pendingStart by mutableStateOf<DevicePendingStart?>(null)
         private set
 
+    // 快捷设置图块点击后待处理的设备编号，由首页消费并触发启动按钮逻辑
+    var pendingExternalDeviceId by mutableStateOf<String?>(null)
+        private set
+
+    fun requestExternalDeviceStart(deviceId: String) {
+        pendingExternalDeviceId = deviceId
+    }
+
+    fun consumeExternalDeviceStart() {
+        pendingExternalDeviceId = null
+    }
+
     fun prepareStartDevice(device: Device) {
         val name = device.name.ifEmpty { device.id }
         // 水表(5)/淋浴(6)/直饮水(8) 无模式/多通道，免请求直接弹确认

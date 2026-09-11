@@ -162,6 +162,16 @@ fun MainScaffold(viewModel: AppViewModel) {
     val mainPagerState = rememberMainPagerState(pagerState, coroutineScope)
     val navBarBackdrop = rememberAppBlurBackdrop(viewModel.state.appBlur)
 
+    // 快捷设置图块：回到首页并触发对应设备的“启动按钮”流程，停在弹出对话框
+    val startDeviceId = AppShortcut.startDeviceId
+    LaunchedEffect(startDeviceId) {
+        val id = startDeviceId ?: return@LaunchedEffect
+        while (backStack.size > 1) backStack.removeLastOrNull()
+        mainPagerState.animateToPage(0)
+        viewModel.requestExternalDeviceStart(id)
+        AppShortcut.consumeStartDevice()
+    }
+
     LaunchedEffect(pagerState.currentPage) {
         mainPagerState.syncPage()
         when (pagerState.currentPage) {

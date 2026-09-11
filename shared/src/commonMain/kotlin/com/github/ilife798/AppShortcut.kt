@@ -2,6 +2,7 @@ package com.github.ilife798
 
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 
 /**
@@ -19,5 +20,17 @@ object AppShortcut {
 
     fun consumeScan() {
         scanRequestId = 0
+    }
+
+    /** 快捷设置图块点击后请求启动的设备编号；null 表示无请求 */
+    var startDeviceId by mutableStateOf<String?>(null)
+        private set
+
+    fun requestStartDevice(deviceId: String) {
+        startDeviceId = deviceId
+    }
+
+    fun consumeStartDevice() {
+        startDeviceId = null
     }
 }

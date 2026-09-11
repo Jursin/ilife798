@@ -7,8 +7,6 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import com.github.ilife798.data.api.ApiConfig
 
-private const val ACTION_SCAN = "com.github.ilife798.action.SCAN"
-
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
@@ -16,15 +14,14 @@ class MainActivity : ComponentActivity() {
         ApplicationContext.instance = applicationContext
         ActivityHolder.current = this
         AppStorage.instance = PersistentStorage(applicationContext)
+        DeviceTile.controller = AndroidDeviceTileController(applicationContext)
         ApiConfig.init(
             gateway = BuildConfig.API_GATEWAY,
             salt = BuildConfig.SIGN_SALT,
             clientId = BuildConfig.API_CID
         )
 
-        if (intent?.action == ACTION_SCAN) {
-            AppShortcut.requestScan()
-        }
+        handleIntent(intent)
 
         setContent {
             App()
@@ -34,8 +31,15 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        if (intent.action == ACTION_SCAN) {
-            AppShortcut.requestScan()
+        handleIntent(intent)
+    }
+
+    private fun handleIntent(intent: Intent?) {
+        when (intent?.action) {
+            ACTION_SCAN -> AppShortcut.requestScan()
+            ACTION_START_DEVICE -> {
+                intent.getStringExtra(EXTRA_DEVICE_ID)?.let { AppShortcut.requestStartDevice(it) }
+            }
         }
     }
 
