@@ -124,7 +124,6 @@ data class AppState(
     val devices: List<Device> = emptyList(),
     val points: PointsInfo = PointsInfo(),
     val taskRecords: List<TaskRecord> = emptyList(),
-    val scoreRecords: List<ScoreRecord> = emptyList(),
     val wallets: List<WalletAccount> = emptyList(),
     val activeWalletId: String = "",
     val billRecords: List<BillRecord> = emptyList(),

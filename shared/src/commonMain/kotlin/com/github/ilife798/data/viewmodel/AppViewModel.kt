@@ -38,10 +38,13 @@ import com.github.ilife798.util.formatTimestamp
 import com.github.ilife798.util.getDayOfWeek
 import com.github.ilife798.util.getTodayStart
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -61,7 +64,13 @@ private const val QR_TYPE_DOOR_LOCK = 8
 
 class AppViewModel : ViewModel() {
 
-    private val api = IlifeApi()
+    // HttpClient 构建较重，延迟到首次网络调用时再创建，避免阻塞首帧渲染
+    private val api by lazy {
+        IlifeApi().apply {
+            onSessionExpired = { handleSessionExpired() }
+            onApiError = { showToast(it) }
+        }
+    }
     private val rateLimiter = TokenRateLimiter()
 
     private fun logError(scope: String, e: Exception) {
@@ -90,15 +99,33 @@ class AppViewModel : ViewModel() {
         private set
 
     init {
-        api.onSessionExpired = { handleSessionExpired() }
-        api.onApiError = { showToast(it) }
+        loadSettings()
         loadSavedAccount()
+    }
+
+    private fun loadSettings() {
+        try {
+            val storage = AppStorage.instance
+            state = state.copy(
+                dynamicColor = storage.getBoolean(StorageKeys.DYNAMIC_COLOR, true),
+                floatingNav = storage.getBoolean(StorageKeys.FLOATING_NAV, false),
+                appBlur = storage.getBoolean(StorageKeys.APP_BLUR, true),
+                predictiveBackEnabled = storage.getBoolean(StorageKeys.PREDICTIVE_BACK, true),
+                themeMode = ThemeMode.entries.firstOrNull { it.name == storage.getString(StorageKeys.THEME_MODE) }
+                    ?: ThemeMode.System
+            )
+        } catch (e: Exception) {
+            logError("loadSettings", e)
+        }
     }
 
     private fun handleSessionExpired() {
         if (state.account.token.isEmpty() && state.account.appToken.isEmpty()) return
-        showToast("登录状态失效，请重新登录")
-        clearLoginState()
+        viewModelScope.launch {
+            if (state.account.token.isEmpty() && state.account.appToken.isEmpty()) return@launch
+            showToast("登录状态失效，请重新登录")
+            clearLoginState()
+        }
     }
 
     private fun loadSavedAccount() {
@@ -128,7 +155,8 @@ class AppViewModel : ViewModel() {
         if (token.isEmpty()) return
         viewModelScope.launch {
             try {
-                val result = api.getAccountInfo(token)
+                // 首次在此构建 HttpClient，放到后台线程，避免阻塞首帧
+                val result = withContext(Dispatchers.Default) { api.getAccountInfo(token) }
                 if (result != null) {
                     loadDeviceInfo()
                     loadAccountInfo()
@@ -357,10 +385,7 @@ class AppViewModel : ViewModel() {
         spendingStats = SpendingStats()
         rechargeProducts = emptyList()
         refundProgress = null
-        scoreHasMore = false
-        scoreLoadingMore = false
-        scorePage = 0
-        scoreLoadToken = ""
+        scoreLists = emptyScoreLists()
         scoreFilter = ScoreFilter.All
         billHasMore = false
         billLoadingMore = false
@@ -375,7 +400,6 @@ class AppViewModel : ViewModel() {
             devices = emptyList(),
             points = PointsInfo(),
             accountInfo = AccountInfo(),
-            scoreRecords = emptyList(),
             wallets = emptyList(),
             activeWalletId = "",
             billRecords = emptyList(),
@@ -413,15 +437,15 @@ class AppViewModel : ViewModel() {
     }
 
     // --- Devices ---
-    fun loadDeviceInfo(force: Boolean = false) {
+    fun loadDeviceInfo(force: Boolean = false): Job? {
         val useApp = state.account.appToken.isNotEmpty()
         val token = if (useApp) state.account.appToken else state.account.token
         val appType = if (useApp) "1,1" else "1,5"
-        if (token.isEmpty()) return
+        if (token.isEmpty()) return null
         val now = currentTimeMillis()
-        if (!force && now - lastDeviceLoadTime < 5000) return
+        if (!force && now - lastDeviceLoadTime < 5000) return null
         lastDeviceLoadTime = now
-        viewModelScope.launch {
+        return viewModelScope.launch {
             try {
                 val master = api.getMasterDevices(token)
                 // 账号已切换/退出登录，丢弃过期结果
@@ -452,13 +476,13 @@ class AppViewModel : ViewModel() {
         }
     }
 
-    fun loadAccountInfo() {
+    fun loadAccountInfo(): Job? {
         val token = state.account.appToken.ifEmpty { state.account.token }
-        if (token.isEmpty()) return
+        if (token.isEmpty()) return null
         val now = currentTimeMillis()
-        if (now - lastAccountLoadTime < 5000) return
+        if (now - lastAccountLoadTime < 5000) return null
         lastAccountLoadTime = now
-        viewModelScope.launch {
+        return viewModelScope.launch {
             try {
                 val info = api.getAccountInfo(token)
                 if (state.account.appToken != token && state.account.token != token) return@launch
@@ -629,30 +653,50 @@ class AppViewModel : ViewModel() {
     var missions by mutableStateOf<List<MissionInfo>>(emptyList())
         private set
 
-    var scoreLoadingMore by mutableStateOf(false)
-        private set
-    var scoreHasMore by mutableStateOf(false)
-        private set
+    private data class ScoreListState(
+        val records: List<ScoreRecord> = emptyList(),
+        val page: Int = 0,
+        val hasMore: Boolean = false,
+        val loadingMore: Boolean = false,
+        val loaded: Boolean = false
+    )
+
+    private var scoreLists by mutableStateOf(
+        ScoreFilter.entries.associateWith { ScoreListState() }
+    )
+
     var scoreFilter by mutableStateOf(ScoreFilter.All)
         private set
-    private var scorePage = 0
-    private var scoreLoadToken = ""
+
+    val scoreRecords: List<ScoreRecord>
+        get() = scoreLists[scoreFilter]?.records ?: emptyList()
+    val scoreHasMore: Boolean
+        get() = scoreLists[scoreFilter]?.hasMore ?: false
+    val scoreLoadingMore: Boolean
+        get() = scoreLists[scoreFilter]?.loadingMore ?: false
 
     private fun toScoreRecord(dto: ScoreDto) = ScoreRecord(score = dto.score, name = dto.name, time = dto.time)
 
     // 积分数据读取优先用设备登录凭据（appToken），与设备/账单保持一致
     private fun scoreToken(): String = state.account.appToken.ifEmpty { state.account.token }
 
-    private fun loadScoreFirstPage(token: String) {
-        val src = scoreFilter.src
-        viewModelScope.launch {
+    private fun emptyScoreLists(): Map<ScoreFilter, ScoreListState> =
+        ScoreFilter.entries.associateWith { ScoreListState() }
+
+    private fun loadScoreFirstPage(filter: ScoreFilter): Job? {
+        val token = scoreToken()
+        if (token.isEmpty()) return null
+        val src = filter.src
+        return viewModelScope.launch {
             try {
                 val result = api.getScoreList(token, page = 0, size = SCORE_PAGE_SIZE, src = src)
-                if (scoreToken() != token || scoreFilter.src != src) return@launch
-                scoreLoadToken = token
-                scorePage = 0
-                scoreHasMore = result.total > result.records.size
-                state = state.copy(scoreRecords = result.records.map(::toScoreRecord))
+                if (scoreToken() != token) return@launch
+                scoreLists = scoreLists + (filter to ScoreListState(
+                    records = result.records.map(::toScoreRecord),
+                    page = 0,
+                    hasMore = result.total > result.records.size,
+                    loaded = true
+                ))
             } catch (e: Exception) {
                 logError("loadScoreFirstPage", e)
             }
@@ -665,56 +709,58 @@ class AppViewModel : ViewModel() {
         val now = currentTimeMillis()
         if (now - lastScoreLoadTime < 5000) return
         lastScoreLoadTime = now
-        loadScoreFirstPage(token)
+        loadScoreFirstPage(scoreFilter)
         loadScoreSummary()
     }
 
-    fun loadScoreInfoNoCooldown() {
-        val token = scoreToken()
-        if (token.isEmpty()) return
-        loadScoreFirstPage(token)
+    fun loadScoreInfoNoCooldown(): Job? {
+        return loadScoreFirstPage(scoreFilter)
     }
 
     fun selectScoreFilter(filter: ScoreFilter) {
         if (scoreFilter == filter) return
         scoreFilter = filter
-        scorePage = 0
-        scoreHasMore = false
-        scoreLoadToken = ""
-        state = state.copy(scoreRecords = emptyList())
-        val token = scoreToken()
-        if (token.isNotEmpty()) loadScoreFirstPage(token)
+        // 分类已缓存则直接展示；未缓存（如首次加载失败）时补一次请求
+        if (scoreLists[filter]?.loaded != true) loadScoreFirstPage(filter)
     }
 
     fun loadMoreScores() {
+        val filter = scoreFilter
+        val current = scoreLists[filter] ?: return
         val token = scoreToken()
-        if (token.isEmpty() || scoreLoadingMore || !scoreHasMore || scoreLoadToken != token) return
-        scoreLoadingMore = true
-        val src = scoreFilter.src
+        if (token.isEmpty() || current.loadingMore || !current.hasMore || !current.loaded) return
+        scoreLists = scoreLists + (filter to current.copy(loadingMore = true))
+        val src = filter.src
         viewModelScope.launch {
             try {
-                val nextPage = scorePage + 1
+                val nextPage = current.page + 1
                 val result = api.getScoreList(token, page = nextPage, size = SCORE_PAGE_SIZE, src = src)
-                if (scoreToken() != token || scoreFilter.src != src) return@launch
-                scorePage = nextPage
-                val seen = state.scoreRecords.map { "${it.time}|${it.score}|${it.name}" }.toMutableSet()
+                if (scoreToken() != token) return@launch
+                val latest = scoreLists[filter] ?: return@launch
+                val seen = latest.records.map { "${it.time}|${it.score}|${it.name}" }.toMutableSet()
                 val appended = result.records.map(::toScoreRecord)
                     .filter { seen.add("${it.time}|${it.score}|${it.name}") }
-                state = state.copy(scoreRecords = state.scoreRecords + appended)
-                scoreHasMore = (scorePage + 1) * SCORE_PAGE_SIZE < result.total
+                scoreLists = scoreLists + (filter to latest.copy(
+                    records = latest.records + appended,
+                    page = nextPage,
+                    hasMore = (nextPage + 1) * SCORE_PAGE_SIZE < result.total,
+                    loadingMore = false
+                ))
             } catch (e: Exception) {
                 logError("loadMoreScores", e)
-            } finally {
-                scoreLoadingMore = false
+                val latest = scoreLists[filter]
+                if (latest != null) {
+                    scoreLists = scoreLists + (filter to latest.copy(loadingMore = false))
+                }
             }
         }
     }
 
     // 积分概览
-    fun loadScoreSummary() {
+    fun loadScoreSummary(): Job? {
         val token = scoreToken()
-        if (token.isEmpty()) return
-        viewModelScope.launch {
+        if (token.isEmpty()) return null
+        return viewModelScope.launch {
             try {
                 val result = api.getMissionList(token)
                 if (scoreToken() != token) return@launch
@@ -730,9 +776,30 @@ class AppViewModel : ViewModel() {
         }
     }
 
+    // 进入积分明细页：重置为全部分类，一次性拉取全部分类并缓存，之后切换分类直接读缓存
     fun refreshScorePage() {
+        scoreFilter = ScoreFilter.All
+        lastScoreLoadTime = currentTimeMillis()
+        ScoreFilter.entries.forEach { loadScoreFirstPage(it) }
         loadScoreSummary()
-        loadScoreInfoNoCooldown()
+    }
+
+    var scoreRefreshing by mutableStateOf(false)
+        private set
+
+    fun refreshScores() {
+        if (scoreRefreshing) return
+        scoreRefreshing = true
+        viewModelScope.launch {
+            try {
+                lastScoreLoadTime = currentTimeMillis()
+                val jobs = ScoreFilter.entries.mapNotNull { loadScoreFirstPage(it) } +
+                    listOfNotNull(loadScoreSummary())
+                jobs.joinAll()
+            } finally {
+                scoreRefreshing = false
+            }
+        }
     }
 
     // --- Wallet & Bills ---
@@ -748,10 +815,10 @@ class AppViewModel : ViewModel() {
 
     private fun walletToken(): String = state.account.appToken.ifEmpty { state.account.token }
 
-    fun loadWallet() {
+    fun loadWallet(): Job? {
         val token = walletToken()
-        if (token.isEmpty()) return
-        viewModelScope.launch {
+        if (token.isEmpty()) return null
+        return viewModelScope.launch {
             try {
                 val result = api.getWalletOwner(token, all = true)
                 if (walletToken() != token) return@launch
@@ -808,8 +875,8 @@ class AppViewModel : ViewModel() {
         state.wallets.firstOrNull { it.id == id }?.let { loadWalletDetail(it) }
     }
 
-    private fun loadBillFirstPage(token: String) {
-        viewModelScope.launch {
+    private fun loadBillFirstPage(token: String): Job {
+        return viewModelScope.launch {
             try {
                 val result = api.getBillList(token, page = 0, size = BILL_PAGE_SIZE, status = BILL_STATUS)
                 if (walletToken() != token) return@launch
@@ -823,10 +890,10 @@ class AppViewModel : ViewModel() {
         }
     }
 
-    fun loadBillsNoCooldown() {
+    fun loadBillsNoCooldown(): Job? {
         val token = walletToken()
-        if (token.isEmpty()) return
-        loadBillFirstPage(token)
+        if (token.isEmpty()) return null
+        return loadBillFirstPage(token)
     }
 
     fun loadMoreBills() {
@@ -856,17 +923,32 @@ class AppViewModel : ViewModel() {
         loadBillsNoCooldown()
     }
 
+    var billRefreshing by mutableStateOf(false)
+        private set
+
+    fun refreshBills() {
+        if (billRefreshing) return
+        billRefreshing = true
+        viewModelScope.launch {
+            try {
+                listOfNotNull(loadWallet(), loadBillsNoCooldown()).joinAll()
+            } finally {
+                billRefreshing = false
+            }
+        }
+    }
+
     // --- Spending stats (home) ---
     var spendingStats by mutableStateOf(SpendingStats())
         private set
 
-    fun loadSpendingStats() {
+    fun loadSpendingStats(): Job? {
         val token = walletToken()
-        if (token.isEmpty()) return
+        if (token.isEmpty()) return null
         val now = currentTimeMillis()
-        if (now - lastSpendingLoadTime < 5000) return
+        if (now - lastSpendingLoadTime < 5000) return null
         lastSpendingLoadTime = now
-        viewModelScope.launch {
+        return viewModelScope.launch {
             try {
                 val monthPrefix = currentTimeFormatted("yyyy-MM")
                 val todayKey = currentTimeFormatted("yyyy-MM-dd")
@@ -1268,26 +1350,56 @@ class AppViewModel : ViewModel() {
     // --- Settings ---
     fun setDynamicColor(enabled: Boolean) {
         state = state.copy(dynamicColor = enabled)
+        AppStorage.instance.saveBoolean(StorageKeys.DYNAMIC_COLOR, enabled)
     }
 
     fun setFloatingNav(enabled: Boolean) {
         state = state.copy(floatingNav = enabled)
+        AppStorage.instance.saveBoolean(StorageKeys.FLOATING_NAV, enabled)
     }
 
     fun setAppBlur(enabled: Boolean) {
         state = state.copy(appBlur = enabled)
+        AppStorage.instance.saveBoolean(StorageKeys.APP_BLUR, enabled)
     }
 
     fun setPredictiveBackEnabled(enabled: Boolean) {
         state = state.copy(predictiveBackEnabled = enabled)
+        AppStorage.instance.saveBoolean(StorageKeys.PREDICTIVE_BACK, enabled)
     }
 
     fun setThemeMode(mode: ThemeMode) {
         state = state.copy(themeMode = mode)
+        AppStorage.instance.saveString(StorageKeys.THEME_MODE, mode.name)
     }
 
     fun clearError() {
         errorMessage = null
+    }
+
+    var homeRefreshing by mutableStateOf(false)
+        private set
+
+    fun refreshHome() {
+        if (homeRefreshing) return
+        homeRefreshing = true
+        viewModelScope.launch {
+            try {
+                lastDeviceLoadTime = 0L
+                lastAccountLoadTime = 0L
+                lastScoreLoadTime = 0L
+                lastSpendingLoadTime = 0L
+                listOfNotNull(
+                    loadDeviceInfo(force = true),
+                    loadAccountInfo(),
+                    loadScoreInfoNoCooldown(),
+                    loadScoreSummary(),
+                    loadSpendingStats()
+                ).joinAll()
+            } finally {
+                homeRefreshing = false
+            }
+        }
     }
 
     fun forceRefresh() {

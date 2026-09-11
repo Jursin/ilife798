@@ -20,4 +20,8 @@ actual class PersistentStorage {
     actual fun getBoolean(key: String): Boolean {
         return defaults.boolForKey(key)
     }
+
+    actual fun getBoolean(key: String, defaultValue: Boolean): Boolean {
+        return if (defaults.objectForKey(key) == null) defaultValue else defaults.boolForKey(key)
+    }
 }

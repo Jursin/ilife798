@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
@@ -28,7 +29,6 @@ import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.basic.TopAppBar
 import top.yukonga.miuix.kmp.icon.MiuixIcons
@@ -40,6 +40,8 @@ import com.github.ilife798.data.viewmodel.AppViewModel
 import com.github.ilife798.ui.theme.appBarBlur
 import com.github.ilife798.ui.theme.blurAppBarColor
 import com.github.ilife798.ui.theme.rememberAppBlurBackdrop
+import top.yukonga.miuix.kmp.icon.extended.Add
+import top.yukonga.miuix.kmp.icon.extended.Scan
 
 @Composable
 fun DeviceAddPage(
@@ -109,14 +111,21 @@ fun DeviceAddPage(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        TextButton(
-                            text = "扫一扫",
+                        Button(
                             modifier = Modifier.weight(1f),
                             onClick = {
                                 focusManager.clearFocus()
                                 onScanClick()
-                            }
-                        )
+                            },
+                            colors = primaryButtonColors(dynamicColor)
+                        ) {
+                            Icon(
+                                imageVector = MiuixIcons.Scan,
+                                contentDescription = "扫描"
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(text = "扫一扫")
+                        }
                         Button(
                             modifier = Modifier.weight(1f),
                             onClick = {
@@ -128,6 +137,11 @@ fun DeviceAddPage(
                             enabled = deviceId.isNotBlank(),
                             colors = primaryButtonColors(dynamicColor)
                         ) {
+                            Icon(
+                                imageVector = MiuixIcons.Add,
+                                contentDescription = "添加"
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
                             Text(text = "添加")
                         }
                     }

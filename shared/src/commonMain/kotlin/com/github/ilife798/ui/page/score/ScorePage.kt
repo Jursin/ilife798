@@ -27,6 +27,7 @@ import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.InfiniteProgressIndicator
 import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
+import top.yukonga.miuix.kmp.basic.PullToRefresh
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.TabRowDefaults
 import top.yukonga.miuix.kmp.basic.TabRowWithContour
@@ -51,7 +52,7 @@ private const val LOAD_MORE_THRESHOLD_PX = 200
 @Composable
 fun ScorePage(viewModel: AppViewModel, onBack: () -> Unit) {
     val state = viewModel.state
-    val scores = state.scoreRecords
+    val scores = viewModel.scoreRecords
     val scrollBehavior = MiuixScrollBehavior()
     val blurBackdrop = rememberAppBlurBackdrop(state.appBlur)
     val scrollState = rememberScrollState()
@@ -93,109 +94,119 @@ fun ScorePage(viewModel: AppViewModel, onBack: () -> Unit) {
             )
         }
     ) { paddingValues ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .captureForBlur(blurBackdrop)
-                .nestedScroll(scrollBehavior.nestedScrollConnection)
-                .scrollEndHaptic()
-                .overScrollVertical()
-                .verticalScroll(scrollState)
-                .padding(paddingValues)
-                .padding(horizontal = 16.dp)
-                .padding(top = 8.dp, bottom = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+        PullToRefresh(
+            isRefreshing = viewModel.scoreRefreshing,
+            onRefresh = { viewModel.refreshScores() },
+            modifier = Modifier.fillMaxSize(),
+            topAppBarScrollBehavior = scrollBehavior,
+            contentPadding = paddingValues,
+            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+            refreshTexts = listOf("下拉刷新", "松开刷新", "正在刷新…", "刷新完成")
         ) {
-            Card(modifier = Modifier.fillMaxWidth()) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text(
-                        text = "积分概览",
-                        style = MiuixTheme.textStyles.title2,
-                        color = MiuixTheme.colorScheme.onSurface
-                    )
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 12.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        ScoreSummaryItem(
-                            label = "可用积分",
-                            value = state.points.available,
-                            alignEnd = false
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .captureForBlur(blurBackdrop)
+                    .nestedScroll(scrollBehavior.nestedScrollConnection)
+                    .scrollEndHaptic()
+                    .overScrollVertical()
+                    .verticalScroll(scrollState)
+                    .padding(paddingValues)
+                    .padding(horizontal = 16.dp)
+                    .padding(top = 8.dp, bottom = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Card(modifier = Modifier.fillMaxWidth()) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text(
+                            text = "积分概览",
+                            style = MiuixTheme.textStyles.title2,
+                            color = MiuixTheme.colorScheme.onSurface
                         )
-                        ScoreSummaryItem(
-                            label = "累计积分",
-                            value = state.points.total,
-                            alignEnd = true
-                        )
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 12.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            ScoreSummaryItem(
+                                label = "可用积分",
+                                value = state.points.available,
+                                alignEnd = false
+                            )
+                            ScoreSummaryItem(
+                                label = "累计积分",
+                                value = state.points.total,
+                                alignEnd = true
+                            )
+                        }
                     }
                 }
-            }
 
-            Card(modifier = Modifier.fillMaxWidth()) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text(
-                        text = "积分记录",
-                        style = MiuixTheme.textStyles.title2,
-                        color = MiuixTheme.colorScheme.onSurface
-                    )
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                    TabRowWithContour(
-                        tabs = listOf("全部", "收入", "支出"),
-                        selectedTabIndex = when (viewModel.scoreFilter) {
-                            ScoreFilter.All -> 0
-                            ScoreFilter.Income -> 1
-                            ScoreFilter.Expense -> 2
-                        },
-                        onTabSelected = { index -> viewModel.selectScoreFilter(ScoreFilter.entries[index]) },
-                        colors = TabRowDefaults.tabRowColors(
-                            backgroundColor = MiuixTheme.colorScheme.surfaceContainerHigh,
-                            contentColor = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                            selectedBackgroundColor = MiuixTheme.colorScheme.primary,
-                            selectedContentColor = MiuixTheme.colorScheme.onPrimary
-                        )
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    val isLoggedIn = state.account.appToken.isNotEmpty() || state.account.token.isNotEmpty()
-                    if (scores.isEmpty()) {
+                Card(modifier = Modifier.fillMaxWidth()) {
+                    Column(modifier = Modifier.padding(16.dp)) {
                         Text(
-                            text = if (!isLoggedIn) "请先登录" else "暂无数据",
-                            style = MiuixTheme.textStyles.body2,
-                            color = MiuixTheme.colorScheme.onSurfaceVariantSummary
+                            text = "积分记录",
+                            style = MiuixTheme.textStyles.title2,
+                            color = MiuixTheme.colorScheme.onSurface
                         )
-                    } else {
-                        scores.forEach { record ->
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 6.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Column(modifier = Modifier.weight(1f)) {
+                        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                        TabRowWithContour(
+                            tabs = listOf("全部", "收入", "支出"),
+                            selectedTabIndex = when (viewModel.scoreFilter) {
+                                ScoreFilter.All -> 0
+                                ScoreFilter.Income -> 1
+                                ScoreFilter.Expense -> 2
+                            },
+                            onTabSelected = { index -> viewModel.selectScoreFilter(ScoreFilter.entries[index]) },
+                            colors = TabRowDefaults.tabRowColors(
+                                backgroundColor = MiuixTheme.colorScheme.surfaceContainerHigh,
+                                contentColor = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                                selectedBackgroundColor = MiuixTheme.colorScheme.primary,
+                                selectedContentColor = MiuixTheme.colorScheme.onPrimary
+                            )
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        val isLoggedIn = state.account.appToken.isNotEmpty() || state.account.token.isNotEmpty()
+                        if (scores.isEmpty()) {
+                            Text(
+                                text = if (!isLoggedIn) "请先登录" else "暂无数据",
+                                style = MiuixTheme.textStyles.body2,
+                                color = MiuixTheme.colorScheme.onSurfaceVariantSummary
+                            )
+                        } else {
+                            scores.forEach { record ->
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 6.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = record.name,
+                                            style = MiuixTheme.textStyles.subtitle,
+                                            color = MiuixTheme.colorScheme.onSurface
+                                        )
+                                        Text(
+                                            text = formatScoreTime(record.time),
+                                            style = MiuixTheme.textStyles.body2,
+                                            color = MiuixTheme.colorScheme.onSurfaceVariantSummary
+                                        )
+                                    }
                                     Text(
-                                        text = record.name,
-                                        style = MiuixTheme.textStyles.subtitle,
-                                        color = MiuixTheme.colorScheme.onSurface
-                                    )
-                                    Text(
-                                        text = formatScoreTime(record.time),
-                                        style = MiuixTheme.textStyles.body2,
-                                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary
+                                        text = if (record.score > 0) "+${record.score}" else "${record.score}",
+                                        style = MiuixTheme.textStyles.title3,
+                                        fontWeight = FontWeight.Medium,
+                                        color = if (record.score > 0) MiuixTheme.colorScheme.primary else MiuixTheme.colorScheme.error
                                     )
                                 }
-                                Text(
-                                    text = if (record.score > 0) "+${record.score}" else "${record.score}",
-                                    style = MiuixTheme.textStyles.title3,
-                                    fontWeight = FontWeight.Medium,
-                                    color = if (record.score > 0) MiuixTheme.colorScheme.primary else MiuixTheme.colorScheme.error
-                                )
                             }
+                            ScoreListFooter(
+                                loadingMore = viewModel.scoreLoadingMore,
+                                hasMore = viewModel.scoreHasMore
+                            )
                         }
-                        ScoreListFooter(
-                            loadingMore = viewModel.scoreLoadingMore,
-                            hasMore = viewModel.scoreHasMore
-                        )
                     }
                 }
             }

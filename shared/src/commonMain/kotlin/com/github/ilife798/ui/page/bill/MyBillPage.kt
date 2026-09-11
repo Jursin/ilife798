@@ -40,6 +40,7 @@ import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.InfiniteProgressIndicator
 import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
+import top.yukonga.miuix.kmp.basic.PullToRefresh
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
@@ -130,77 +131,87 @@ fun MyBillPage(viewModel: AppViewModel, onBack: () -> Unit) {
             )
         }
     ) { paddingValues ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .captureForBlur(blurBackdrop)
-                .nestedScroll(scrollBehavior.nestedScrollConnection)
-                .scrollEndHaptic()
-                .overScrollVertical()
-                .verticalScroll(scrollState)
-                .padding(paddingValues)
-                .padding(horizontal = 16.dp)
-                .padding(top = 8.dp, bottom = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+        PullToRefresh(
+            isRefreshing = viewModel.billRefreshing,
+            onRefresh = { viewModel.refreshBills() },
+            modifier = Modifier.fillMaxSize(),
+            topAppBarScrollBehavior = scrollBehavior,
+            contentPadding = paddingValues,
+            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+            refreshTexts = listOf("下拉刷新", "松开刷新", "正在刷新…", "刷新完成")
         ) {
-            WalletHeaderCard(
-                wallets = wallets,
-                activeWallet = activeWallet,
-                panel = panel,
-                isLoggedIn = isLoggedIn,
-                onSelectWallet = { viewModel.selectWallet(it) },
-                onToggleRecharge = {
-                    panel = if (panel == BillPanel.Recharge) BillPanel.Records else BillPanel.Recharge
-                },
-                onToggleRefund = {
-                    panel = if (panel == BillPanel.Refund) BillPanel.Records else BillPanel.Refund
-                }
-            )
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .captureForBlur(blurBackdrop)
+                    .nestedScroll(scrollBehavior.nestedScrollConnection)
+                    .scrollEndHaptic()
+                    .overScrollVertical()
+                    .verticalScroll(scrollState)
+                    .padding(paddingValues)
+                    .padding(horizontal = 16.dp)
+                    .padding(top = 8.dp, bottom = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                WalletHeaderCard(
+                    wallets = wallets,
+                    activeWallet = activeWallet,
+                    panel = panel,
+                    isLoggedIn = isLoggedIn,
+                    onSelectWallet = { viewModel.selectWallet(it) },
+                    onToggleRecharge = {
+                        panel = if (panel == BillPanel.Recharge) BillPanel.Records else BillPanel.Recharge
+                    },
+                    onToggleRefund = {
+                        panel = if (panel == BillPanel.Refund) BillPanel.Records else BillPanel.Refund
+                    }
+                )
 
-            AnimatedContent(
-                targetState = panel,
-                transitionSpec = {
-                    (fadeIn(tween(220)) + slideInVertically(tween(220)) { it / 10 }) togetherWith
-                        (fadeOut(tween(150)) + slideOutVertically(tween(150)) { -it / 10 })
-                },
-                label = "billPanel"
-            ) { target ->
-                when (target) {
-                    BillPanel.Records -> BillRecordsCard(
-                        records = state.billRecords,
-                        loadingMore = viewModel.billLoadingMore,
-                        hasMore = viewModel.billHasMore,
-                        isLoggedIn = isLoggedIn
-                    )
+                AnimatedContent(
+                    targetState = panel,
+                    transitionSpec = {
+                        (fadeIn(tween(220)) + slideInVertically(tween(220)) { it / 10 }) togetherWith
+                            (fadeOut(tween(150)) + slideOutVertically(tween(150)) { -it / 10 })
+                    },
+                    label = "billPanel"
+                ) { target ->
+                    when (target) {
+                        BillPanel.Records -> BillRecordsCard(
+                            records = state.billRecords,
+                            loadingMore = viewModel.billLoadingMore,
+                            hasMore = viewModel.billHasMore,
+                            isLoggedIn = isLoggedIn
+                        )
 
-                    BillPanel.Recharge -> RechargeCard(
-                        products = viewModel.rechargeProducts,
-                        loading = viewModel.rechargeLoading,
-                        paying = viewModel.rechargePaying,
-                        chargeEnabled = activeWallet?.chargeEnabled ?: true,
-                        selectedProductId = selectedProductId,
-                        dynamicColor = state.dynamicColor,
-                        isLoggedIn = isLoggedIn,
-                        onSelectProduct = { selectedProductId = it },
-                        onRecharge = {
-                            val product = viewModel.rechargeProducts
-                                .firstOrNull { it.id == selectedProductId }
-                            if (product != null) {
-                                scope.launch {
-                                    val result = viewModel.submitRecharge(product)
-                                    if (result.message.isNotEmpty()) showToast(result.message)
+                        BillPanel.Recharge -> RechargeCard(
+                            products = viewModel.rechargeProducts,
+                            loading = viewModel.rechargeLoading,
+                            paying = viewModel.rechargePaying,
+                            chargeEnabled = activeWallet?.chargeEnabled ?: true,
+                            selectedProductId = selectedProductId,
+                            dynamicColor = state.dynamicColor,
+                            isLoggedIn = isLoggedIn,
+                            onSelectProduct = { selectedProductId = it },
+                            onRecharge = {
+                                val product = viewModel.rechargeProducts
+                                    .firstOrNull { it.id == selectedProductId }
+                                if (product != null) {
+                                    scope.launch {
+                                        val result = viewModel.submitRecharge(product)
+                                        if (result.message.isNotEmpty()) showToast(result.message)
+                                    }
                                 }
                             }
-                        }
-                    )
+                        )
 
-                    BillPanel.Refund -> RefundCard(
-                        wallet = activeWallet,
-                        refundProgress = viewModel.refundProgress,
-                        paying = viewModel.refundSubmitting,
-                        isLoggedIn = isLoggedIn,
-                        onRefund = { showRefundDialog = true }
-                    )
+                        BillPanel.Refund -> RefundCard(
+                            wallet = activeWallet,
+                            refundProgress = viewModel.refundProgress,
+                            paying = viewModel.refundSubmitting,
+                            isLoggedIn = isLoggedIn,
+                            onRefund = { showRefundDialog = true }
+                        )
+                    }
                 }
             }
         }

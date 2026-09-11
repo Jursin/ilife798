@@ -30,6 +30,7 @@ import top.yukonga.miuix.kmp.basic.HorizontalDivider
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
+import top.yukonga.miuix.kmp.basic.PullToRefresh
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
@@ -72,53 +73,63 @@ fun HomePage(viewModel: AppViewModel, onDeviceAddClick: () -> Unit = {}) {
             )
         }
     ) { paddingValues ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .captureForBlur(blurBackdrop)
-                .nestedScroll(scrollBehavior.nestedScrollConnection)
-                .scrollEndHaptic()
-                .overScrollVertical()
-                .verticalScroll(rememberScrollState())
-                .padding(paddingValues)
-                .padding(horizontal = 16.dp)
-                .padding(top = 8.dp, bottom = 80.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+        PullToRefresh(
+            isRefreshing = viewModel.homeRefreshing,
+            onRefresh = { viewModel.refreshHome() },
+            modifier = Modifier.fillMaxSize(),
+            topAppBarScrollBehavior = scrollBehavior,
+            contentPadding = paddingValues,
+            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+            refreshTexts = listOf("下拉刷新", "松开刷新", "正在刷新…", "刷新完成")
         ) {
-            val stats = viewModel.spendingStats
-            val isLoggedIn = state.account.appToken.isNotEmpty() || state.account.token.isNotEmpty()
-            Row(
+            Column(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .height(IntrinsicSize.Min),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    .fillMaxSize()
+                    .captureForBlur(blurBackdrop)
+                    .nestedScroll(scrollBehavior.nestedScrollConnection)
+                    .scrollEndHaptic()
+                    .overScrollVertical()
+                    .verticalScroll(rememberScrollState())
+                    .padding(paddingValues)
+                    .padding(horizontal = 16.dp)
+                    .padding(top = 8.dp, bottom = 80.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                SpendingCard(
-                    label = "昨日花费",
-                    value = stats.yesterday,
-                    isLoggedIn = isLoggedIn,
+                val stats = viewModel.spendingStats
+                val isLoggedIn = state.account.appToken.isNotEmpty() || state.account.token.isNotEmpty()
+                Row(
                     modifier = Modifier
-                        .weight(1f)
-                        .fillMaxHeight()
-                )
-                SpendingCard(
-                    label = "今日花费",
-                    value = stats.today,
-                    isLoggedIn = isLoggedIn,
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxHeight()
-                )
-                SpendingCard(
-                    label = "本月平均花费",
-                    value = stats.monthAverage,
-                    isLoggedIn = isLoggedIn,
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxHeight()
-                )
+                        .fillMaxWidth()
+                        .height(IntrinsicSize.Min),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    SpendingCard(
+                        label = "昨日花费",
+                        value = stats.yesterday,
+                        isLoggedIn = isLoggedIn,
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
+                    )
+                    SpendingCard(
+                        label = "今日花费",
+                        value = stats.today,
+                        isLoggedIn = isLoggedIn,
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
+                    )
+                    SpendingCard(
+                        label = "本月平均花费",
+                        value = stats.monthAverage,
+                        isLoggedIn = isLoggedIn,
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
+                    )
+                }
+                DeviceCard(viewModel, onDeviceAddClick)
             }
-            DeviceCard(viewModel, onDeviceAddClick)
         }
     }
 }

@@ -168,7 +168,7 @@ actual fun QrScannerPage(onBack: () -> Unit, onResult: (String) -> Unit) {
         providerFuture.addListener({
             val cameraProvider = providerFuture.get()
             val preview = Preview.Builder().build().also {
-                it.setSurfaceProvider(previewView.surfaceProvider)
+                it.surfaceProvider = previewView.surfaceProvider
             }
             val analysis = ImageAnalysis.Builder()
                 .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
@@ -213,7 +213,7 @@ actual fun QrScannerPage(onBack: () -> Unit, onResult: (String) -> Unit) {
             title = "扫描二维码",
             modifier = Modifier.align(Alignment.TopCenter),
             color = Color.Transparent,
-            titleColor = Color.White,
+            largeTitleColor = Color.White,
             navigationIcon = {
                 IconButton(onClick = onBack) {
                     Icon(imageVector = MiuixIcons.Back, contentDescription = "返回", tint = Color.White)

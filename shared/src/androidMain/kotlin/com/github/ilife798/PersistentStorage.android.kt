@@ -22,4 +22,8 @@ actual class PersistentStorage(context: Context) {
     actual fun getBoolean(key: String): Boolean {
         return prefs.getBoolean(key, false)
     }
+
+    actual fun getBoolean(key: String, defaultValue: Boolean): Boolean {
+        return prefs.getBoolean(key, defaultValue)
+    }
 }
