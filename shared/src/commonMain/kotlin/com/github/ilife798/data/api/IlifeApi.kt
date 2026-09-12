@@ -307,7 +307,8 @@ class IlifeApi(private val client: HttpClient = createHttpClient()) {
         val dailyAdId = dailyRsp?.get("adId")?.jsonPrimitive?.content ?: ""
         val dailyScore = dailyRsp?.get("score")?.jsonPrimitive?.content?.toIntOrNull() ?: 5
 
-        // Parse limits[] -> map of refId to daily completed count
+        // Parse limits[] -> map of refId to today's completed count.
+        // 官方 n0.b 语义：值为 -1 表示今日已达上限，按任务上限计入；负数一律视为已完成。
         val limitsArray = accScore?.get("limits")?.jsonArray ?: emptyList()
         val dailyDoneMap = mutableMapOf<String, Int>()
         for (item in limitsArray) {
@@ -326,12 +327,17 @@ class IlifeApi(private val client: HttpClient = createHttpClient()) {
             val score = obj["score"]?.jsonPrimitive?.content?.toIntOrNull() ?: 0
             val limit = obj["limit"]?.jsonPrimitive?.content?.toIntOrNull() ?: 0
             if (limit <= 0) return@mapNotNull null
+            val rawDone = dailyDoneMap[refId]
             MissionDto(
                 adId = refId,
                 name = obj["name"]?.jsonPrimitive?.content ?: obj["title"]?.jsonPrimitive?.content ?: "任务",
                 score = score,
                 limit = limit,
-                dailyCompleted = dailyDoneMap[refId] ?: 0
+                dailyCompleted = when {
+                    rawDone == null -> 0
+                    rawDone < 0 -> limit
+                    else -> rawDone
+                }
             )
         }
 

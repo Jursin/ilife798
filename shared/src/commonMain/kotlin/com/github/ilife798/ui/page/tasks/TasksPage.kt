@@ -33,6 +33,7 @@ import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.InfiniteProgressIndicator
 import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
+import top.yukonga.miuix.kmp.basic.PullToRefresh
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
@@ -87,190 +88,200 @@ fun TasksPage(viewModel: AppViewModel, onLoginClick: (isAlipay: Boolean) -> Unit
             )
         }
     ) { paddingValues ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .captureForBlur(blurBackdrop)
-                .nestedScroll(scrollBehavior.nestedScrollConnection)
-                .scrollEndHaptic()
-                .overScrollVertical()
-                .verticalScroll(rememberScrollState())
-                .padding(paddingValues)
-                .padding(horizontal = 16.dp)
-                .padding(top = 8.dp, bottom = 80.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+        PullToRefresh(
+            isRefreshing = viewModel.tasksRefreshing,
+            onRefresh = { viewModel.refreshTasks() },
+            modifier = Modifier.fillMaxSize(),
+            topAppBarScrollBehavior = scrollBehavior,
+            contentPadding = paddingValues,
+            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+            refreshTexts = listOf("下拉刷新", "松开刷新", "正在刷新…", "刷新完成")
         ) {
-            Button(
-                modifier = Modifier.fillMaxWidth(),
-                onClick = {
-                    when {
-                        isLoading -> showStopDialog = true
-                        state.account.appToken.isEmpty() && state.account.token.isEmpty() -> showToast("请先登录")
-                        else -> viewModel.runAllTasks()
-                    }
-                },
-                enabled = (!isLoading && !state.taskCompleted) || isLoading,
-                colors = ButtonDefaults.buttonColors()
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .captureForBlur(blurBackdrop)
+                    .nestedScroll(scrollBehavior.nestedScrollConnection)
+                    .scrollEndHaptic()
+                    .overScrollVertical()
+                    .verticalScroll(rememberScrollState())
+                    .padding(paddingValues)
+                    .padding(horizontal = 16.dp)
+                    .padding(top = 8.dp, bottom = 80.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                if (isLoading) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        InfiniteProgressIndicator(
-                            modifier = Modifier.size(18.dp),
-                            size = 18.dp,
-                            strokeWidth = 2.dp,
-                            orbitingDotSize = 3.dp
-                        )
-                        Text(text = "运行中，点击停止")
+                Button(
+                    modifier = Modifier.fillMaxWidth(),
+                    onClick = {
+                        when {
+                            isLoading -> showStopDialog = true
+                            state.account.appToken.isEmpty() && state.account.token.isEmpty() -> showToast("请先登录")
+                            else -> viewModel.runAllTasks()
+                        }
+                    },
+                    enabled = (!isLoading && !state.taskCompleted) || isLoading,
+                    colors = ButtonDefaults.buttonColors()
+                ) {
+                    if (isLoading) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            InfiniteProgressIndicator(
+                                modifier = Modifier.size(18.dp),
+                                size = 18.dp,
+                                strokeWidth = 2.dp,
+                                orbitingDotSize = 3.dp
+                            )
+                            Text(text = "运行中，点击停止")
+                        }
+                    } else {
+                        Text(text = if (state.taskCompleted) "今日任务已完成" else "运行积分任务")
+                    }
+                }
+
+                if (missions.isNotEmpty()) {
+                    val signIn = missions.firstOrNull { it.isDailySignin }
+                    val regularMissions = missions.filter { !it.isDailySignin && it.limit > 0 && it.score > 0 }
+                    val allMissions = listOfNotNull(signIn) + regularMissions
+
+                    if (allMissions.isNotEmpty()) {
+                        Card(modifier = Modifier.fillMaxWidth()) {
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                Text(
+                                    text = "任务列表 (${allMissions.size})",
+                                    style = MiuixTheme.textStyles.title2,
+                                    color = MiuixTheme.colorScheme.onSurface
+                                )
+                                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                                allMissions.forEach { mission ->
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(vertical = 6.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = mission.name,
+                                                style = MiuixTheme.textStyles.body2,
+                                                color = MiuixTheme.colorScheme.onSurface
+                                            )
+                                            Text(
+                                                text = if (mission.isDailySignin) "每次 +${mission.score} 分"
+                                                else "上限 ${mission.limit} 次 · 每次 +${mission.score} 分",
+                                                style = MiuixTheme.textStyles.body2,
+                                                color = MiuixTheme.colorScheme.onSurfaceVariantSummary
+                                            )
+                                        }
+                                        if (mission.isDailySignin) {
+                                            val weekDay = getDayOfWeek()
+                                            val alreadySigned = (state.weekMask and (1 shl (weekDay - 1))) != 0
+                                            if (alreadySigned) {
+                                                Text(
+                                                    text = "已签到",
+                                                    style = MiuixTheme.textStyles.body2,
+                                                    color = MiuixTheme.colorScheme.primary
+                                                )
+                                            }
+                                        } else if (mission.dailyCompleted > 0) {
+                                            Text(
+                                                text = "已完成（${mission.dailyCompleted}/${mission.limit}）",
+                                                style = MiuixTheme.textStyles.body2,
+                                                color = if (mission.dailyCompleted >= mission.limit) MiuixTheme.colorScheme.primary
+                                                else MiuixTheme.colorScheme.onSurfaceVariantSummary
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
                 } else {
-                    Text(text = if (state.taskCompleted) "今日任务已完成" else "运行积分任务")
-                }
-            }
-
-            if (missions.isNotEmpty()) {
-                val signIn = missions.firstOrNull { it.isDailySignin }
-                val regularMissions = missions.filter { !it.isDailySignin && it.limit > 0 && it.score > 0 }
-                val allMissions = listOfNotNull(signIn) + regularMissions
-
-                if (allMissions.isNotEmpty()) {
+                    val isLoggedIn = state.account.appToken.isNotEmpty() || state.account.token.isNotEmpty()
                     Card(modifier = Modifier.fillMaxWidth()) {
                         Column(modifier = Modifier.padding(16.dp)) {
                             Text(
-                                text = "任务列表 (${allMissions.size})",
+                                text = "任务列表",
                                 style = MiuixTheme.textStyles.title2,
                                 color = MiuixTheme.colorScheme.onSurface
                             )
                             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                            allMissions.forEach { mission ->
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(vertical = 6.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(
-                                            text = mission.name,
-                                            style = MiuixTheme.textStyles.body2,
-                                            color = MiuixTheme.colorScheme.onSurface
-                                        )
-                                        Text(
-                                            text = if (mission.isDailySignin) "每次 +${mission.score} 分"
-                                            else "上限 ${mission.limit} 次 · 每次 +${mission.score} 分",
-                                            style = MiuixTheme.textStyles.body2,
-                                            color = MiuixTheme.colorScheme.onSurfaceVariantSummary
-                                        )
-                                    }
-                                    if (mission.isDailySignin) {
-                                        val weekDay = getDayOfWeek()
-                                        val alreadySigned = (state.weekMask and (1 shl (weekDay - 1))) != 0
-                                        if (alreadySigned) {
-                                            Text(
-                                                text = "已签到",
-                                                style = MiuixTheme.textStyles.body2,
-                                                color = MiuixTheme.colorScheme.primary
-                                            )
-                                        }
-                                    } else if (mission.dailyCompleted > 0) {
-                                        Text(
-                                            text = "已完成（${mission.dailyCompleted}/${mission.limit}）",
-                                            style = MiuixTheme.textStyles.body2,
-                                            color = if (mission.dailyCompleted >= mission.limit) MiuixTheme.colorScheme.primary
-                                            else MiuixTheme.colorScheme.onSurfaceVariantSummary
-                                        )
-                                    }
-                                }
-                            }
+                            Text(
+                                text = if (isLoggedIn) "暂无数据" else "请先登录",
+                                style = MiuixTheme.textStyles.body2,
+                                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                                modifier = Modifier.padding(vertical = 8.dp)
+                            )
                         }
                     }
                 }
-            } else {
-                val isLoggedIn = state.account.appToken.isNotEmpty() || state.account.token.isNotEmpty()
-                Card(modifier = Modifier.fillMaxWidth()) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Text(
-                            text = "任务列表",
-                            style = MiuixTheme.textStyles.title2,
-                            color = MiuixTheme.colorScheme.onSurface
+
+                if (state.account.appToken.isNotEmpty() && !state.account.pointsLoginDone && state.taskLogs.isEmpty()) {
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onLoginClick(true) },
+                        colors = CardDefaults.defaultColors(
+                            color = MiuixTheme.colorScheme.primaryContainer.copy(alpha = 0.25f),
+                            contentColor = MiuixTheme.colorScheme.onSurface
                         )
-                        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                    ) {
                         Text(
-                            text = if (isLoggedIn) "暂无数据" else "请先登录",
+                            text = "完成积分登录解锁更多任务。",
                             style = MiuixTheme.textStyles.body2,
-                            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                            modifier = Modifier.padding(vertical = 8.dp)
+                            color = MiuixTheme.colorScheme.primary,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.padding(16.dp)
                         )
                     }
                 }
-            }
 
-            if (state.account.appToken.isNotEmpty() && !state.account.pointsLoginDone && state.taskLogs.isEmpty()) {
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { onLoginClick(true) },
-                    colors = CardDefaults.defaultColors(
-                        color = MiuixTheme.colorScheme.primaryContainer.copy(alpha = 0.25f),
-                        contentColor = MiuixTheme.colorScheme.onSurface
-                    )
-                ) {
-                    Text(
-                        text = "完成积分登录解锁更多任务。",
-                        style = MiuixTheme.textStyles.body2,
-                        color = MiuixTheme.colorScheme.primary,
-                        fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier.padding(16.dp)
-                    )
-                }
-            }
-
-            if (state.taskLogs.isNotEmpty()) {
-                Card(modifier = Modifier.fillMaxWidth()) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = "运行日志",
-                                style = MiuixTheme.textStyles.title2,
-                                color = MiuixTheme.colorScheme.onSurface
-                            )
-                            IconButton(
-                                minHeight = 35.dp,
-                                minWidth = 35.dp,
-                                backgroundColor = MiuixTheme.colorScheme.secondaryContainer.copy(alpha = 0.8f),
-                                onClick = {
-                                    if (copyTextToClipboard(state.taskLogs.joinToString("\n"))) {
-                                        showToast("已复制到剪贴板")
-                                    } else {
-                                        showToast("复制失败")
-                                    }
-                                }
+                if (state.taskLogs.isNotEmpty()) {
+                    Card(modifier = Modifier.fillMaxWidth()) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Icon(
-                                    imageVector = MiuixIcons.Copy,
-                                    contentDescription = "复制日志",
-                                    modifier = Modifier.size(20.dp),
-                                    tint = MiuixTheme.colorScheme.onSurface.copy(alpha = if (isSystemInDarkTheme()) 0.7f else 0.9f)
+                                Text(
+                                    text = "运行日志",
+                                    style = MiuixTheme.textStyles.title2,
+                                    color = MiuixTheme.colorScheme.onSurface
+                                )
+                                IconButton(
+                                    minHeight = 35.dp,
+                                    minWidth = 35.dp,
+                                    backgroundColor = MiuixTheme.colorScheme.secondaryContainer.copy(alpha = 0.8f),
+                                    onClick = {
+                                        if (copyTextToClipboard(state.taskLogs.joinToString("\n"))) {
+                                            showToast("已复制到剪贴板")
+                                        } else {
+                                            showToast("复制失败")
+                                        }
+                                    }
+                                ) {
+                                    Icon(
+                                        imageVector = MiuixIcons.Copy,
+                                        contentDescription = "复制日志",
+                                        modifier = Modifier.size(20.dp),
+                                        tint = MiuixTheme.colorScheme.onSurface.copy(alpha = if (isSystemInDarkTheme()) 0.7f else 0.9f)
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                            state.taskLogs.forEach { log ->
+                                Text(
+                                    text = log,
+                                    style = MiuixTheme.textStyles.body2,
+                                    color = if (log.contains("成功")) MiuixTheme.colorScheme.primary
+                                    else if (log.contains("失败") || log.contains("异常")) MiuixTheme.colorScheme.error
+                                    else MiuixTheme.colorScheme.onSurface,
+                                    modifier = Modifier.padding(vertical = 2.dp)
                                 )
                             }
-                        }
-                        Spacer(modifier = Modifier.height(8.dp))
-                        state.taskLogs.forEach { log ->
-                            Text(
-                                text = log,
-                                style = MiuixTheme.textStyles.body2,
-                                color = if (log.contains("成功")) MiuixTheme.colorScheme.primary
-                                else if (log.contains("失败") || log.contains("异常")) MiuixTheme.colorScheme.error
-                                else MiuixTheme.colorScheme.onSurface,
-                                modifier = Modifier.padding(vertical = 2.dp)
-                            )
                         }
                     }
                 }

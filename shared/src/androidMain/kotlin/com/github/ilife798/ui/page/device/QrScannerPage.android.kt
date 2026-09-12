@@ -6,15 +6,19 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.provider.Settings
+import android.util.Size as AndroidSize
 import android.view.inputmethod.InputMethodManager
 import androidx.activity.compose.LocalActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.core.Camera
 import androidx.camera.core.CameraSelector
+import androidx.camera.core.FocusMeteringAction
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageProxy
 import androidx.camera.core.Preview
+import androidx.camera.core.resolutionselector.ResolutionSelector
+import androidx.camera.core.resolutionselector.ResolutionStrategy
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.compose.animation.core.LinearEasing
@@ -26,6 +30,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -52,6 +57,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
@@ -59,16 +65,20 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.LifecycleOwner
 import com.google.zxing.BarcodeFormat
+import com.google.zxing.Binarizer
 import com.google.zxing.BinaryBitmap
 import com.google.zxing.DecodeHintType
 import com.google.zxing.MultiFormatReader
 import com.google.zxing.NotFoundException
 import com.google.zxing.PlanarYUVLuminanceSource
+import com.google.zxing.common.GlobalHistogramBinarizer
 import com.google.zxing.common.HybridBinarizer
 import com.github.ilife798.shared.resources.Res
 import com.github.ilife798.shared.resources.ic_torch_off
 import com.github.ilife798.shared.resources.ic_torch_on
+import kotlinx.coroutines.delay
 import org.jetbrains.compose.resources.painterResource
+import kotlin.time.Duration.Companion.milliseconds
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
@@ -83,40 +93,55 @@ import top.yukonga.miuix.kmp.window.WindowDialog
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 
+// 只解码画面中心区域（近似取景框），提升二维码相对占比与识别率
+private const val QR_CROP_FRACTION = 0.8f
+
 private fun decodeQr(reader: MultiFormatReader, imageProxy: ImageProxy): String? {
     val plane = imageProxy.planes.firstOrNull() ?: return null
-    val width = imageProxy.width
-    val height = imageProxy.height
-    if (width <= 0 || height <= 0) return null
+    val fullWidth = imageProxy.width
+    val fullHeight = imageProxy.height
+    if (fullWidth <= 0 || fullHeight <= 0) return null
     val buffer = plane.buffer
     val rowStride = plane.rowStride
     val pixelStride = plane.pixelStride
-    val data = ByteArray(width * height)
-    if (pixelStride == 1 && rowStride == width) {
-        buffer.get(data, 0, minOf(data.size, buffer.remaining()))
-    } else {
-        val row = ByteArray(rowStride)
-        var offset = 0
-        for (y in 0 until height) {
-            val base = y * rowStride
-            if (base >= buffer.limit()) break
-            buffer.position(base)
-            val toRead = minOf(rowStride, buffer.remaining())
-            buffer.get(row, 0, toRead)
-            for (x in 0 until width) {
-                data[offset++] = row[x * pixelStride]
+
+    // 中心正方形 ROI
+    val minSide = minOf(fullWidth, fullHeight)
+    val cropSize = (minSide * QR_CROP_FRACTION).toInt().coerceIn(1, minSide)
+    val cropLeft = (fullWidth - cropSize) / 2
+    val cropTop = (fullHeight - cropSize) / 2
+    val data = ByteArray(cropSize * cropSize)
+    val row = ByteArray(rowStride)
+    for (y in 0 until cropSize) {
+        val base = (cropTop + y) * rowStride
+        if (base >= buffer.limit()) break
+        buffer.position(base)
+        val toRead = minOf(rowStride, buffer.remaining())
+        buffer.get(row, 0, toRead)
+        val dstOffset = y * cropSize
+        if (pixelStride == 1) {
+            System.arraycopy(row, cropLeft, data, dstOffset, cropSize)
+        } else {
+            var idx = cropLeft * pixelStride
+            for (x in 0 until cropSize) {
+                data[dstOffset + x] = row[idx]
+                idx += pixelStride
             }
         }
     }
-    val source = PlanarYUVLuminanceSource(data, width, height, 0, 0, width, height, false)
-    val bitmap = BinaryBitmap(HybridBinarizer(source))
-    return try {
-        reader.decodeWithState(bitmap)?.text
-    } catch (_: NotFoundException) {
-        null
-    } finally {
-        reader.reset()
-    }
+
+    val source = PlanarYUVLuminanceSource(data, cropSize, cropSize, 0, 0, cropSize, cropSize, false)
+    // 先 HybridBinarizer，失败再试 GlobalHistogramBinarizer（应对反光/低对比）
+    return tryDecode(reader, HybridBinarizer(source))
+        ?: tryDecode(reader, GlobalHistogramBinarizer(source))
+}
+
+private fun tryDecode(reader: MultiFormatReader, binarizer: Binarizer): String? = try {
+    reader.decodeWithState(BinaryBitmap(binarizer))?.text
+} catch (_: NotFoundException) {
+    null
+} finally {
+    reader.reset()
 }
 
 @Composable
@@ -159,6 +184,21 @@ actual fun QrScannerPage(onBack: () -> Unit, onResult: (String) -> Unit) {
     LaunchedEffect(torchOn, camera) {
         camera?.cameraControl?.enableTorch(torchOn)
     }
+
+    // 摄像头就绪后先对中心做一次自动对焦
+    LaunchedEffect(camera) {
+        val cam = camera ?: return@LaunchedEffect
+        delay(500.milliseconds)
+        val cx = previewView.width / 2f
+        val cy = previewView.height / 2f
+        if (cx > 0f && cy > 0f) {
+            runCatching {
+                cam.cameraControl.startFocusAndMetering(
+                    FocusMeteringAction.Builder(previewView.meteringPointFactory.createPoint(cx, cy)).build()
+                )
+            }
+        }
+    }
     val reader = remember {
         MultiFormatReader().apply {
             setHints(
@@ -181,8 +221,17 @@ actual fun QrScannerPage(onBack: () -> Unit, onResult: (String) -> Unit) {
             val preview = Preview.Builder().build().also {
                 it.surfaceProvider = previewView.surfaceProvider
             }
+            val resolutionSelector = ResolutionSelector.Builder()
+                .setResolutionStrategy(
+                    ResolutionStrategy(
+                        AndroidSize(1280, 720),
+                        ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER
+                    )
+                )
+                .build()
             val analysis = ImageAnalysis.Builder()
                 .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                .setResolutionSelector(resolutionSelector)
                 .build()
             analysis.setAnalyzer(executor) { imageProxy ->
                 try {
@@ -217,6 +266,23 @@ actual fun QrScannerPage(onBack: () -> Unit, onResult: (String) -> Unit) {
     Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
         if (hasPermission && lifecycleOwner != null) {
             AndroidView(factory = { previewView }, modifier = Modifier.fillMaxSize())
+            // 点击预览区域对焦
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .pointerInput(camera) {
+                        detectTapGestures { offset ->
+                            val cam = camera ?: return@detectTapGestures
+                            runCatching {
+                                cam.cameraControl.startFocusAndMetering(
+                                    FocusMeteringAction.Builder(
+                                        previewView.meteringPointFactory.createPoint(offset.x, offset.y)
+                                    ).build()
+                                )
+                            }
+                        }
+                    }
+            )
             ScannerOverlay(modifier = Modifier.fillMaxSize())
         }
 

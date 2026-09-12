@@ -76,10 +76,13 @@ import kotlin.time.Duration.Companion.seconds
 
 private const val PAY_TYPE_WALLET = 91
 private const val PAY_TYPE_ALIPAY = 21
-private const val SCORE_PAGE_SIZE = 20
-private const val BILL_PAGE_SIZE = 20
+private const val SCORE_PAGE_SIZE = 200
+private const val BILL_PAGE_SIZE = 200
 private const val BILL_STATUS = 3
 private const val SPENDING_MAX_PAGES = 10
+
+// 运行中设备的状态轮询间隔（秒），用于感知机器端手动停止
+private const val DEVICE_MONITOR_INTERVAL_SECONDS = 5L
 
 // 无模式/多通道的设备类型（水表/淋浴/直饮水），启动时无需拉取可选项
 private val SIMPLE_DEVICE_TYPES = setOf(5, 6, 8)
@@ -120,6 +123,10 @@ class AppViewModel : ViewModel() {
 
     var pollingDeviceId by mutableStateOf<String?>(null)
         private set
+
+    // 应用启动后仍在运行的设备（id -> 名称）；机器端手动停止时靠轮询感知并收起通知
+    private val runningDevices = mutableMapOf<String, String>()
+    private var deviceMonitorJob: Job? = null
 
     var errorMessage by mutableStateOf<String?>(null)
         private set
@@ -446,6 +453,9 @@ class AppViewModel : ViewModel() {
     private fun clearAccountData() {
         taskJob?.cancel()
         taskJob = null
+        deviceMonitorJob?.cancel()
+        deviceMonitorJob = null
+        runningDevices.clear()
         pollingDeviceId = null
         missions = emptyList()
         spendingStats = SpendingStats()
@@ -793,6 +803,12 @@ class AppViewModel : ViewModel() {
                 if (!result.success) return@launch
                 showToast(if (starting) "设备已启动" else "设备已停止")
                 RunNotifications.updateDevice(deviceId, deviceName, starting)
+                if (starting) {
+                    runningDevices[deviceId] = deviceName
+                    ensureDeviceMonitor()
+                } else {
+                    runningDevices.remove(deviceId)
+                }
                 // 第一轮：5次 × 2.5秒
                 var newStatus: DevStatusResult? = null
                 var attempt = 0
@@ -827,11 +843,50 @@ class AppViewModel : ViewModel() {
                 // 启动后以轮询结果校正，停止时已立即上报“已停止”
                 if (starting) {
                     RunNotifications.updateDevice(deviceId, deviceName, isRunning)
+                    if (isRunning) {
+                        runningDevices[deviceId] = deviceName
+                        ensureDeviceMonitor()
+                    } else {
+                        runningDevices.remove(deviceId)
+                    }
                 }
             } catch (e: Exception) {
                 showToast("操作失败：${e.message}")
             } finally {
                 if (pollingDeviceId == deviceId) pollingDeviceId = null
+            }
+        }
+    }
+
+    // 周期性检查应用启动后仍在运行的设备；机器端手动停止后收起其运行通知
+    private fun ensureDeviceMonitor() {
+        if (deviceMonitorJob?.isActive == true) return
+        if (runningDevices.isEmpty()) return
+        deviceMonitorJob = viewModelScope.launch {
+            while (isActive && runningDevices.isNotEmpty()) {
+                delay(DEVICE_MONITOR_INTERVAL_SECONDS.seconds)
+                val token = state.account.appToken.ifEmpty { state.account.token }
+                if (token.isEmpty()) break
+                val appType = if (state.account.appToken.isNotEmpty()) "1,1" else "1,5"
+                runningDevices.toMap().forEach { (id, name) ->
+                    val status = try {
+                        api.getDevStatus(token, id, appType)
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        logError("deviceMonitor", e)
+                        null
+                    }
+                    if (status?.geneStatus == 99) {
+                        runningDevices.remove(id)
+                        RunNotifications.updateDevice(id, name, false)
+                        state = state.copy(
+                            devices = state.devices.map {
+                                if (it.id == id) it.copy(geneStatus = 99) else it
+                            }
+                        )
+                    }
+                }
             }
         }
     }
@@ -1015,6 +1070,8 @@ class AppViewModel : ViewModel() {
 
     private var billPage = 0
     private var billLoadToken = ""
+    // 账单加载代次，刷新/切换类型后自增，避免旧分页请求回填过期数据
+    private var billLoadGen = 0
 
     var refundProgress by mutableStateOf<RefundProgress?>(null)
         private set
@@ -1083,10 +1140,11 @@ class AppViewModel : ViewModel() {
 
     private fun loadBillFirstPage(token: String): Job {
         val status = billStatus
+        val gen = ++billLoadGen
         return viewModelScope.launch {
             try {
                 val result = api.getBillList(token, page = 0, size = BILL_PAGE_SIZE, status = status)
-                if (walletToken() != token) return@launch
+                if (gen != billLoadGen || walletToken() != token) return@launch
                 val hasMore = result.total > result.records.size
                 billCache[status] = BillCacheEntry(result.records, 0, hasMore)
                 // 请求期间已切换到其它类型，仅写入缓存
@@ -1095,6 +1153,8 @@ class AppViewModel : ViewModel() {
                 billPage = 0
                 billHasMore = hasMore
                 state = state.copy(billRecords = result.records)
+                // 首屏返回后继续拉取剩余页，保证最后一页（不足 20 条）也被取到
+                if (hasMore) loadAllBills()
             } catch (e: Exception) {
                 logError("loadBillFirstPage", e)
             }
@@ -1126,25 +1186,55 @@ class AppViewModel : ViewModel() {
         return loadBillFirstPage(token)
     }
 
-    fun loadMoreBills() {
+    // 拉取下一页并追加；hasMore 为 false、账号/类型已切换或重新加载时返回 false
+    private suspend fun loadNextBillPage(gen: Int): Boolean {
         val token = walletToken()
         val status = billStatus
+        if (gen != billLoadGen || token.isEmpty() || !billHasMore || billLoadToken != token) return false
+        val nextPage = billPage + 1
+        val result = api.getBillList(token, page = nextPage, size = BILL_PAGE_SIZE, status = status)
+        if (gen != billLoadGen || walletToken() != token || status != billStatus) return false
+        billPage = nextPage
+        val seen = state.billRecords.map { it.id }.toMutableSet()
+        val appended = result.records.filter { it.id.isEmpty() || seen.add(it.id) }
+        val newRecords = state.billRecords + appended
+        billHasMore = result.records.size >= BILL_PAGE_SIZE
+        billCache[status] = BillCacheEntry(newRecords, billPage, billHasMore)
+        state = state.copy(billRecords = newRecords)
+        return true
+    }
+
+    fun loadMoreBills() {
+        val token = walletToken()
         if (token.isEmpty() || billLoadingMore || !billHasMore || billLoadToken != token) return
+        val gen = billLoadGen
         billLoadingMore = true
         viewModelScope.launch {
             try {
-                val nextPage = billPage + 1
-                val result = api.getBillList(token, page = nextPage, size = BILL_PAGE_SIZE, status = status)
-                if (walletToken() != token || status != billStatus) return@launch
-                billPage = nextPage
-                val seen = state.billRecords.map { it.id }.toMutableSet()
-                val appended = result.records.filter { it.id.isEmpty() || seen.add(it.id) }
-                val newRecords = state.billRecords + appended
-                billHasMore = (billPage + 1) * BILL_PAGE_SIZE < result.total
-                billCache[status] = BillCacheEntry(newRecords, billPage, billHasMore)
-                state = state.copy(billRecords = newRecords)
+                loadNextBillPage(gen)
             } catch (e: Exception) {
                 logError("loadMoreBills", e)
+            } finally {
+                billLoadingMore = false
+            }
+        }
+    }
+
+    // 自动拉取剩余全部账单（按 20 条/页，直到最后一页不足 20 条）
+    private fun loadAllBills() {
+        val token = walletToken()
+        if (token.isEmpty() || billLoadingMore || !billHasMore || billLoadToken != token) return
+        val gen = billLoadGen
+        billLoadingMore = true
+        viewModelScope.launch {
+            try {
+                var guard = 0
+                while (billHasMore && gen == billLoadGen && guard < 100) {
+                    if (!loadNextBillPage(gen)) break
+                    guard++
+                }
+            } catch (e: Exception) {
+                logError("loadAllBills", e)
             } finally {
                 billLoadingMore = false
             }
@@ -1324,6 +1414,36 @@ class AppViewModel : ViewModel() {
         val totalScore: Int?
     )
 
+    // 按时间倒序分页拉取今日积分记录，统计各 adId 次数（遇到早于今日的记录即停止）
+    private suspend fun fetchTodayScoreCounts(token: String, todayStart: Long): Map<String, Int> {
+        val counts = mutableMapOf<String, Int>()
+        val pageSize = 50
+        var page = 0
+        while (page < 5) {
+            val records = try {
+                api.getScoreList(token, page = page, size = pageSize).records
+            } catch (e: Exception) {
+                logError("fetchTodayScoreCounts", e)
+                break
+            }
+            if (records.isEmpty()) break
+            var reachedEarlier = false
+            for (score in records) {
+                val timeMs = score.time.toLongOrNull() ?: continue
+                if (timeMs < todayStart) {
+                    reachedEarlier = true
+                    continue
+                }
+                if (score.score > 0 && score.adId.isNotEmpty()) {
+                    counts[score.adId] = (counts[score.adId] ?: 0) + 1
+                }
+            }
+            if (reachedEarlier || records.size < pageSize) break
+            page++
+        }
+        return counts
+    }
+
     // 合并两个登录渠道（appToken 1,1 与 token 1,5）的任务列表，按 adId 去重并记录来源 token
     private suspend fun fetchMergedMissions(): MergedMissions {
         val appToken = state.account.appToken
@@ -1356,21 +1476,7 @@ class AppViewModel : ViewModel() {
             result.validScore?.let { v -> validScore = validScore?.let { maxOf(it, v) } ?: v }
             result.totalScore?.let { v -> totalScore = totalScore?.let { maxOf(it, v) } ?: v }
 
-            val todayCount = mutableMapOf<String, Int>()
-            val scores = try {
-                api.getScoreList(tok).records
-            } catch (e: Exception) {
-                logError("fetchMergedMissions.scoreLst", e)
-                emptyList()
-            }
-            for (score in scores) {
-                if (score.score > 0 && score.adId.isNotEmpty()) {
-                    val timeMs = score.time.toLongOrNull() ?: continue
-                    if (timeMs >= todayStart) {
-                        todayCount[score.adId] = (todayCount[score.adId] ?: 0) + 1
-                    }
-                }
-            }
+            val todayCount = fetchTodayScoreCounts(tok, todayStart)
 
             for (m in result.missions) {
                 if (m.adId.isBlank()) continue
@@ -1414,25 +1520,42 @@ class AppViewModel : ViewModel() {
         val now = currentTimeMillis()
         if (now - lastMissionsLoadTime < 5000) return
         lastMissionsLoadTime = now
+        viewModelScope.launch { reloadMissionsAndReturn() }
+    }
+
+    // 拉取任务列表与完成状态，成功时更新 missions/weekMask/积分；账号已切换则返回 null
+    private suspend fun reloadMissionsAndReturn(): MergedMissions? {
         val startApp = state.account.appToken
         val startPoints = state.account.token
-        viewModelScope.launch {
-            try {
-                val merged = fetchMergedMissions()
-                // 账号已切换/退出登录，丢弃过期结果
-                if (state.account.appToken != startApp || state.account.token != startPoints) return@launch
-                missions = merged.missions
-                state = state.copy(
-                    weekMask = merged.weekMask,
-                    points = state.points.copy(
-                        available = merged.validScore ?: state.points.available,
-                        total = merged.totalScore ?: state.points.total
-                    )
+        return try {
+            val merged = fetchMergedMissions()
+            // 账号已切换/退出登录，丢弃过期结果
+            if (state.account.appToken != startApp || state.account.token != startPoints) return null
+            missions = merged.missions
+            state = state.copy(
+                weekMask = merged.weekMask,
+                points = state.points.copy(
+                    available = merged.validScore ?: state.points.available,
+                    total = merged.totalScore ?: state.points.total
                 )
-            } catch (e: Exception) {
-                logError("loadMissions", e)
-            }
+            )
+            merged
+        } catch (e: Exception) {
+            logError("loadMissions", e)
+            null
         }
+    }
+
+    // 任务是否已全部完成：每日签到 + 所有有上限任务均达上限
+    private fun isAllTasksCompleted(missions: List<MissionInfo>, weekMask: Int): Boolean {
+        if (missions.isEmpty()) return false
+        val regular = missions.filter { !it.isDailySignin && it.limit > 0 && it.score > 0 }
+        val allDone = regular.all { it.dailyCompleted >= it.limit }
+        val weekDay = getDayOfWeek()
+        val signInDone = missions.firstOrNull { it.isDailySignin }?.let {
+            (weekMask and (1 shl (weekDay - 1))) != 0
+        } ?: true
+        return allDone && signInDone
     }
 
     // 桌面快捷方式“运行积分任务”：未登录/运行中/已完成时给出提示
@@ -1449,7 +1572,17 @@ class AppViewModel : ViewModel() {
             showToast("今日任务已完成")
             return
         }
-        runAllTasks()
+        viewModelScope.launch {
+            // 拉取最新任务与完成状态，全部完成时不再运行
+            lastMissionsLoadTime = currentTimeMillis()
+            val merged = reloadMissionsAndReturn()
+            if (merged != null && isAllTasksCompleted(merged.missions, merged.weekMask)) {
+                state = state.copy(taskCompleted = true)
+                showToast("今日任务已完成")
+                return@launch
+            }
+            runAllTasks()
+        }
     }
 
     fun runAllTasks() {
@@ -1606,6 +1739,27 @@ class AppViewModel : ViewModel() {
 
     fun setTaskCompleted() {
         state = state.copy(taskCompleted = true)
+    }
+
+    var tasksRefreshing by mutableStateOf(false)
+        private set
+
+    // 下拉刷新：刷新任务列表与完成状态，同时清空并隐藏运行日志
+    fun refreshTasks() {
+        if (tasksRefreshing) return
+        tasksRefreshing = true
+        viewModelScope.launch {
+            try {
+                lastMissionsLoadTime = currentTimeMillis()
+                val merged = reloadMissionsAndReturn() ?: return@launch
+                state = state.copy(
+                    taskCompleted = isAllTasksCompleted(merged.missions, merged.weekMask),
+                    taskLogs = emptyList()
+                )
+            } finally {
+                tasksRefreshing = false
+            }
+        }
     }
 
     private fun addTaskLog(message: String) {
