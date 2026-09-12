@@ -26,4 +26,12 @@ actual class PersistentStorage(context: Context) {
     actual fun getBoolean(key: String, defaultValue: Boolean): Boolean {
         return prefs.getBoolean(key, defaultValue)
     }
+
+    actual fun saveInt(key: String, value: Int) {
+        prefs.edit { putInt(key, value) }
+    }
+
+    actual fun getInt(key: String, defaultValue: Int): Int {
+        return prefs.getInt(key, defaultValue)
+    }
 }

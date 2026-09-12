@@ -13,6 +13,16 @@ import android.service.quicksettings.TileService
  */
 class DeviceTileService : TileService() {
 
+    override fun onTileAdded() {
+        super.onTileAdded()
+        DeviceTilePrefs.setTileAdded(this, true)
+    }
+
+    override fun onTileRemoved() {
+        super.onTileRemoved()
+        DeviceTilePrefs.setTileAdded(this, false)
+    }
+
     override fun onStartListening() {
         super.onStartListening()
         val tile = qsTile ?: return

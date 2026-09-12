@@ -23,6 +23,12 @@ enum class DeviceTileResult {
  */
 interface DeviceTileController {
     fun bind(deviceId: String, deviceName: String, onResult: (DeviceTileResult) -> Unit)
+
+    /** 当前设备上是否已存在本应用的快捷设置图块。 */
+    fun isTileAdded(): Boolean
+
+    /** 记录已在设备上创建图块，供下次启动判断是否还需要显示引导。 */
+    fun markTileAdded()
 }
 
 object DeviceTile {
@@ -31,5 +37,11 @@ object DeviceTile {
     fun bind(deviceId: String, deviceName: String, onResult: (DeviceTileResult) -> Unit) {
         val c = controller
         if (c == null) onResult(DeviceTileResult.UNSUPPORTED) else c.bind(deviceId, deviceName, onResult)
+    }
+
+    fun isTileAdded(): Boolean = controller?.isTileAdded() ?: false
+
+    fun markTileAdded() {
+        controller?.markTileAdded()
     }
 }

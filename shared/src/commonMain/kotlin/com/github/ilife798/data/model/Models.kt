@@ -153,6 +153,15 @@ data class BillRecord(
 
 enum class ThemeMode { Light, Dark, System }
 
+enum class PaletteStyle(val displayName: String) {
+    TonalSpot("TonalSpot"),
+    Neutral("Neutral"),
+    Vibrant("Vibrant"),
+    Expressive("Expressive")
+}
+
+const val DEFAULT_SEED_COLOR: Int = 0xFF6750A4.toInt()
+
 @Serializable
 data class AccountInfo(
     val img: String = "",
@@ -172,6 +181,9 @@ data class AppState(
     val taskCompleted: Boolean = false,
     val taskLogs: List<String> = emptyList(),
     val dynamicColor: Boolean = true,
+    val customColor: Boolean = false,
+    val paletteStyle: PaletteStyle = PaletteStyle.TonalSpot,
+    val seedColor: Int = DEFAULT_SEED_COLOR,
     val floatingNav: Boolean = false,
     val appBlur: Boolean = true,
     val predictiveBackEnabled: Boolean = true,

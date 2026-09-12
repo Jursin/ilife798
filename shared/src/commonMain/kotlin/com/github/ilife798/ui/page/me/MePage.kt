@@ -1,10 +1,16 @@
 package com.github.ilife798.ui.page.me
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -29,6 +35,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalUriHandler
@@ -37,7 +44,6 @@ import coil3.compose.AsyncImage
 import top.yukonga.miuix.kmp.basic.BasicComponent
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
-import com.github.ilife798.ui.theme.primaryButtonColors
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.CardDefaults
 import top.yukonga.miuix.kmp.basic.Icon
@@ -52,8 +58,10 @@ import top.yukonga.miuix.kmp.basic.TopAppBar
 import com.github.ilife798.ui.theme.captureForBlur
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Contacts
+import top.yukonga.miuix.kmp.icon.extended.Hide
 import top.yukonga.miuix.kmp.icon.extended.Import
 import top.yukonga.miuix.kmp.icon.extended.Remove
+import top.yukonga.miuix.kmp.icon.extended.Show
 import top.yukonga.miuix.kmp.preference.OverlayDropdownPreference
 import top.yukonga.miuix.kmp.shader.isRuntimeShaderSupported
 import top.yukonga.miuix.kmp.theme.MiuixTheme
@@ -62,9 +70,12 @@ import top.yukonga.miuix.kmp.utils.overScrollVertical
 import top.yukonga.miuix.kmp.utils.scrollEndHaptic
 import top.yukonga.miuix.kmp.window.WindowDialog
 import com.github.ilife798.data.model.ThemeMode
+import com.github.ilife798.data.model.PaletteStyle
 import com.github.ilife798.data.viewmodel.AppViewModel
 import com.github.ilife798.getAppVersion
 import com.github.ilife798.getAppVersionCode
+import com.github.ilife798.ui.theme.ColorSwatchPreview
+import com.github.ilife798.ui.theme.PresetColors
 import com.github.ilife798.ui.theme.WindowBlurEffect
 import com.github.ilife798.ui.theme.appBarBlur
 import com.github.ilife798.ui.theme.blurAppBarColor
@@ -125,8 +136,8 @@ private fun AccountSection(
     val account = viewModel.state.account
     val accountInfo = viewModel.state.accountInfo
     val hasApp = account.appToken.isNotEmpty()
-    val dynamicColor = viewModel.state.dynamicColor
     var showLogoutDialog by remember { mutableStateOf(false) }
+    var showPhone by remember { mutableStateOf(false) }
 
     LaunchedEffect(hasApp) {
         if (hasApp) viewModel.loadAccountInfo()
@@ -173,11 +184,28 @@ private fun AccountSection(
                     color = MiuixTheme.colorScheme.onSurface
                 )
                 if (accountInfo.pn.isNotEmpty()) {
-                    Text(
-                        text = accountInfo.pn,
-                        style = MiuixTheme.textStyles.body2,
-                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text(
+                            text = if (showPhone) accountInfo.pn else maskPhoneMiddle4(accountInfo.pn),
+                            style = MiuixTheme.textStyles.body2,
+                            color = MiuixTheme.colorScheme.onSurfaceVariantSummary
+                        )
+                        IconButton(
+                            minHeight = 24.dp,
+                            minWidth = 24.dp,
+                            onClick = { showPhone = !showPhone }
+                        ) {
+                            Icon(
+                                imageVector = if (showPhone) MiuixIcons.Hide else MiuixIcons.Show,
+                                contentDescription = if (showPhone) "隐藏" else "显示",
+                                modifier = Modifier.size(16.dp),
+                                tint = MiuixTheme.colorScheme.onSurfaceVariantSummary
+                            )
+                        }
+                    }
                 }
             }
             if (hasApp) {
@@ -220,7 +248,7 @@ private fun AccountSection(
                 Button(
                     modifier = Modifier.weight(1f),
                     onClick = onBillClick,
-                    colors = primaryButtonColors(dynamicColor)
+                    colors = ButtonDefaults.buttonColors()
                 ) {
                     Icon(
                         imageVector = MiuixIcons.Notes,
@@ -232,7 +260,7 @@ private fun AccountSection(
                 Button(
                     modifier = Modifier.weight(1f),
                     onClick = onScoreClick,
-                    colors = primaryButtonColors(dynamicColor)
+                    colors = ButtonDefaults.buttonColors()
                 ) {
                     Icon(
                         imageVector = MiuixIcons.Create,
@@ -329,16 +357,6 @@ private fun SettingsSection(viewModel: AppViewModel, onLicenseClick: () -> Unit)
                 )
             }
             BasicComponent(
-                title = "动态取色",
-                summary = "基于系统壁纸颜色生成配色方案",
-                endActions = {
-                    Switch(
-                        checked = state.dynamicColor,
-                        onCheckedChange = { viewModel.setDynamicColor(it) }
-                    )
-                }
-            )
-            BasicComponent(
                 title = "预测性返回动画",
                 summary = "返回滑动前提前预览即将跳转至的界面",
                 endActions = {
@@ -348,6 +366,57 @@ private fun SettingsSection(viewModel: AppViewModel, onLicenseClick: () -> Unit)
                     )
                 }
             )
+            BasicComponent(
+                title = "自定义颜色",
+                summary = "自定义应用主题配色方案",
+                endActions = {
+                    Switch(
+                        checked = state.customColor,
+                        onCheckedChange = { viewModel.setCustomColor(it) }
+                    )
+                }
+            )
+            AnimatedVisibility(
+                visible = state.customColor,
+                enter = fadeIn() + expandVertically(),
+                exit = fadeOut() + shrinkVertically()
+            ) {
+                BasicComponent(
+                    title = "动态取色",
+                    summary = "基于系统壁纸颜色生成配色方案",
+                    endActions = {
+                        Switch(
+                            checked = state.dynamicColor,
+                            onCheckedChange = { viewModel.setDynamicColor(it) }
+                        )
+                    }
+                )
+            }
+            AnimatedVisibility(
+                visible = state.customColor,
+                enter = fadeIn() + expandVertically(),
+                exit = fadeOut() + shrinkVertically()
+            ) {
+                OverlayDropdownPreference(
+                    title = "调色板风格",
+                    items = PaletteStyle.entries.map { it.displayName },
+                    selectedIndex = PaletteStyle.entries.indexOf(state.paletteStyle).coerceAtLeast(0),
+                    onSelectedIndexChange = { index ->
+                        viewModel.setPaletteStyle(PaletteStyle.entries[index])
+                    }
+                )
+            }
+            AnimatedVisibility(
+                visible = state.customColor && !state.dynamicColor,
+                enter = fadeIn() + expandVertically(),
+                exit = fadeOut() + shrinkVertically()
+            ) {
+                PresetColorGrid(
+                    paletteStyle = state.paletteStyle,
+                    selectedSeed = state.seedColor,
+                    onSelect = { viewModel.setSeedColor(it) }
+                )
+            }
             BasicComponent(
                 title = "悬浮底栏",
                 summary = "切换悬浮式底部导航栏",
@@ -365,7 +434,7 @@ private fun SettingsSection(viewModel: AppViewModel, onLicenseClick: () -> Unit)
         Column {
             BasicComponent(
                 title = "版本",
-                summary = "${getAppVersion()}（${getAppVersionCode()}）"
+                summary = "${getAppVersion()}(${getAppVersionCode()})"
             )
             BasicComponent(
                 title = "查看源代码",
@@ -441,6 +510,55 @@ private fun SettingsSection(viewModel: AppViewModel, onLicenseClick: () -> Unit)
             }
         )
     }
+}
+
+@Composable
+private fun PresetColorGrid(
+    paletteStyle: PaletteStyle,
+    selectedSeed: Int,
+    onSelect: (Int) -> Unit
+) {
+    BoxWithConstraints(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 4.dp)
+    ) {
+        val columns = (maxWidth / 80.dp).toInt().coerceAtLeast(1)
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            PresetColors.chunked(columns).forEach { rowItems ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    rowItems.forEach { preset ->
+                        Box(
+                            modifier = Modifier.weight(1f),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            ColorSwatchPreview(
+                                preset = preset,
+                                paletteStyle = paletteStyle,
+                                selected = selectedSeed == preset.color.toArgb(),
+                                onClick = { onSelect(preset.color.toArgb()) }
+                            )
+                        }
+                    }
+                    repeat(columns - rowItems.size) {
+                        Spacer(modifier = Modifier.weight(1f))
+                    }
+                }
+            }
+        }
+    }
+}
+
+private fun maskPhoneMiddle4(phone: String): String {
+    if (phone.length < 7) return phone
+    val start = (phone.length - 4) / 2
+    return phone.substring(0, start) + "****" + phone.substring(start + 4)
 }
 
 private val disclaimerLines = listOf(

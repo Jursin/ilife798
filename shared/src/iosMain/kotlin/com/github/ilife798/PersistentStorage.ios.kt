@@ -24,4 +24,12 @@ actual class PersistentStorage {
     actual fun getBoolean(key: String, defaultValue: Boolean): Boolean {
         return if (defaults.objectForKey(key) == null) defaultValue else defaults.boolForKey(key)
     }
+
+    actual fun saveInt(key: String, value: Int) {
+        defaults.setInteger(value.toLong(), forKey = key)
+    }
+
+    actual fun getInt(key: String, defaultValue: Int): Int {
+        return if (defaults.objectForKey(key) == null) defaultValue else defaults.integerForKey(key).toInt()
+    }
 }

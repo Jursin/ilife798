@@ -12,6 +12,7 @@ object DeviceTilePrefs {
     const val NAME = "device_tile"
     const val KEY_DEVICE_ID = "device_id"
     const val KEY_DEVICE_NAME = "device_name"
+    const val KEY_TILE_ADDED = "tile_added"
 
     fun save(context: Context, deviceId: String, deviceName: String) {
         context.getSharedPreferences(NAME, Context.MODE_PRIVATE)
@@ -26,4 +27,12 @@ object DeviceTilePrefs {
 
     fun deviceName(context: Context): String? =
         context.getSharedPreferences(NAME, Context.MODE_PRIVATE).getString(KEY_DEVICE_NAME, null)
+
+    fun setTileAdded(context: Context, added: Boolean) {
+        context.getSharedPreferences(NAME, Context.MODE_PRIVATE)
+            .edit { putBoolean(KEY_TILE_ADDED, added) }
+    }
+
+    fun isTileAdded(context: Context): Boolean =
+        context.getSharedPreferences(NAME, Context.MODE_PRIVATE).getBoolean(KEY_TILE_ADDED, false)
 }

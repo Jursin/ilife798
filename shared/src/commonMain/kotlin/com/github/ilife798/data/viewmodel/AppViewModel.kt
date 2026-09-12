@@ -14,12 +14,14 @@ import com.github.ilife798.data.model.Account
 import com.github.ilife798.data.model.AccountInfo
 import com.github.ilife798.data.model.AppState
 import com.github.ilife798.data.model.BillRecord
+import com.github.ilife798.data.model.DEFAULT_SEED_COLOR
 import com.github.ilife798.data.model.Device
 import com.github.ilife798.data.model.DevicePendingStart
 import com.github.ilife798.data.model.DeviceStartOptions
 import com.github.ilife798.data.model.HomeDeviceType
 import com.github.ilife798.data.model.MissionInfo
 import com.github.ilife798.data.model.PointsInfo
+import com.github.ilife798.data.model.PaletteStyle
 import com.github.ilife798.data.model.RechargeProduct
 import com.github.ilife798.data.model.RefundProgress
 import com.github.ilife798.data.model.ScoreFilter
@@ -28,6 +30,7 @@ import com.github.ilife798.data.model.SpendingStats
 import com.github.ilife798.data.model.TaskRecord
 import com.github.ilife798.data.model.ThemeMode
 import com.github.ilife798.data.model.WalletAccount
+import com.github.ilife798.DeviceTile
 import com.github.ilife798.toImageBitmap
 import com.github.ilife798.AppStorage
 import com.github.ilife798.StorageKeys
@@ -116,6 +119,10 @@ class AppViewModel : ViewModel() {
             val storage = AppStorage.instance
             state = state.copy(
                 dynamicColor = storage.getBoolean(StorageKeys.DYNAMIC_COLOR, true),
+                customColor = storage.getBoolean(StorageKeys.CUSTOM_COLOR, false),
+                paletteStyle = PaletteStyle.entries.firstOrNull { it.name == storage.getString(StorageKeys.PALETTE_STYLE) }
+                    ?: PaletteStyle.TonalSpot,
+                seedColor = storage.getInt(StorageKeys.SEED_COLOR, DEFAULT_SEED_COLOR),
                 floatingNav = storage.getBoolean(StorageKeys.FLOATING_NAV, false),
                 appBlur = storage.getBoolean(StorageKeys.APP_BLUR, true),
                 predictiveBackEnabled = storage.getBoolean(StorageKeys.PREDICTIVE_BACK, true),
@@ -483,6 +490,15 @@ class AppViewModel : ViewModel() {
         if (dtypes.isEmpty()) return
         HomeDeviceType.entries.firstOrNull { it.deviceType in dtypes }
             ?.let { homeDeviceType = it }
+    }
+
+    // 设备上是否已存在快捷设置图块，用于隐藏首页引导提示
+    var homeTileCreated by mutableStateOf(DeviceTile.isTileAdded())
+        private set
+
+    fun markHomeTileCreated() {
+        homeTileCreated = true
+        DeviceTile.markTileAdded()
     }
 
     fun loadDeviceInfo(force: Boolean = false): Job? {
@@ -1516,6 +1532,21 @@ class AppViewModel : ViewModel() {
     fun setDynamicColor(enabled: Boolean) {
         state = state.copy(dynamicColor = enabled)
         AppStorage.instance.saveBoolean(StorageKeys.DYNAMIC_COLOR, enabled)
+    }
+
+    fun setCustomColor(enabled: Boolean) {
+        state = state.copy(customColor = enabled)
+        AppStorage.instance.saveBoolean(StorageKeys.CUSTOM_COLOR, enabled)
+    }
+
+    fun setPaletteStyle(style: PaletteStyle) {
+        state = state.copy(paletteStyle = style)
+        AppStorage.instance.saveString(StorageKeys.PALETTE_STYLE, style.name)
+    }
+
+    fun setSeedColor(color: Int) {
+        state = state.copy(seedColor = color)
+        AppStorage.instance.saveInt(StorageKeys.SEED_COLOR, color)
     }
 
     fun setFloatingNav(enabled: Boolean) {

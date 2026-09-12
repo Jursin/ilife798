@@ -64,6 +64,11 @@ private fun valueOf(account: Account, field: CredentialField): String = when (fi
     CredentialField.UID -> account.uid
 }
 
+private fun maskCredential(value: String): String {
+    if (value.length <= 8) return value
+    return value.take(4) + "*".repeat(value.length - 8) + value.takeLast(4)
+}
+
 @Composable
 fun AccountPage(
     viewModel: AppViewModel,
@@ -112,6 +117,7 @@ fun AccountPage(
                 Column {
                     CredentialField.entries.forEach { field ->
                         val value = valueOf(account, field)
+                        val display = if (value.isEmpty()) "-" else maskCredential(value)
                         val onTap = {
                             if (value.isNotEmpty()) {
                                 if (copyTextToClipboard(value)) showToast("已复制 ${field.key}")
@@ -129,13 +135,13 @@ fun AccountPage(
                         if (field == CredentialField.UID) {
                             BasicComponent(
                                 title = field.title,
-                                summary = "${field.key}: ${value.ifEmpty { "-" }}",
+                                summary = "${field.key}: $display",
                                 onClick = onTap
                             )
                         } else {
                             BasicComponent(
                                 title = field.title,
-                                summary = "${field.key}: ${value.ifEmpty { "-" }}",
+                                summary = "${field.key}: $display",
                                 modifier = Modifier.combinedClickable(
                                     onClick = { onTap() },
                                     onLongClick = {

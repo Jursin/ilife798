@@ -6,6 +6,8 @@ expect class PersistentStorage {
     fun saveBoolean(key: String, value: Boolean)
     fun getBoolean(key: String): Boolean
     fun getBoolean(key: String, defaultValue: Boolean): Boolean
+    fun saveInt(key: String, value: Int)
+    fun getInt(key: String, defaultValue: Int): Int
 }
 
 object StorageKeys {
@@ -17,6 +19,9 @@ object StorageKeys {
     const val TOKEN = "account_token"
     const val APP_TOKEN = "account_app_token"
     const val DYNAMIC_COLOR = "setting_dynamic_color"
+    const val CUSTOM_COLOR = "setting_custom_color"
+    const val PALETTE_STYLE = "setting_palette_style"
+    const val SEED_COLOR = "setting_seed_color"
     const val FLOATING_NAV = "setting_floating_nav"
     const val APP_BLUR = "setting_app_blur"
     const val PREDICTIVE_BACK = "setting_predictive_back"

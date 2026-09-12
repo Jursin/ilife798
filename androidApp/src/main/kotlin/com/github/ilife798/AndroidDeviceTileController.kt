@@ -8,6 +8,12 @@ import android.os.Build
 import android.service.quicksettings.TileService
 
 class AndroidDeviceTileController(private val context: Context) : DeviceTileController {
+    override fun isTileAdded(): Boolean = DeviceTilePrefs.isTileAdded(context)
+
+    override fun markTileAdded() {
+        DeviceTilePrefs.setTileAdded(context, true)
+    }
+
     override fun bind(deviceId: String, deviceName: String, onResult: (DeviceTileResult) -> Unit) {
         // 绑定信息持久化，供 TileService 读取
         DeviceTilePrefs.save(context, deviceId, deviceName)

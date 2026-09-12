@@ -26,7 +26,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
-import com.github.ilife798.ui.theme.primaryButtonColors
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.CardDefaults
 import top.yukonga.miuix.kmp.basic.HorizontalDivider
@@ -111,7 +110,7 @@ fun TasksPage(viewModel: AppViewModel, onLoginClick: (isAlipay: Boolean) -> Unit
                     }
                 },
                 enabled = (!isLoading && !state.taskCompleted) || isLoading,
-                colors = primaryButtonColors(state.dynamicColor)
+                colors = ButtonDefaults.buttonColors()
             ) {
                 if (isLoading) {
                     Row(

@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
@@ -18,8 +19,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.unit.dp
 import top.yukonga.miuix.kmp.basic.Button
 import com.github.ilife798.ui.theme.primaryButtonColors
@@ -51,7 +56,15 @@ fun DeviceAddPage(
 ) {
     var deviceId by remember { mutableStateOf("") }
     val focusManager = LocalFocusManager.current
+    val keyboard = LocalSoftwareKeyboardController.current
+    val deviceIdFocusRequester = remember { FocusRequester() }
     val scrollBehavior = MiuixScrollBehavior()
+
+    // 进入页面自动聚焦设备编号输入框并弹出键盘
+    LaunchedEffect(Unit) {
+        deviceIdFocusRequester.requestFocus()
+        keyboard?.show()
+    }
     val dynamicColor = viewModel.state.dynamicColor
     val blurBackdrop = rememberAppBlurBackdrop(viewModel.state.appBlur)
 
@@ -88,6 +101,12 @@ fun DeviceAddPage(
             modifier = Modifier
                 .fillMaxSize()
                 .captureForBlur(blurBackdrop)
+                .pointerInput(Unit) {
+                    detectTapGestures {
+                        focusManager.clearFocus()
+                        keyboard?.hide()
+                    }
+                }
                 .scrollEndHaptic()
                 .overScrollVertical()
                 .verticalScroll(rememberScrollState())
@@ -101,7 +120,7 @@ fun DeviceAddPage(
                     TextField(
                         value = deviceId,
                         onValueChange = { deviceId = it },
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth().focusRequester(deviceIdFocusRequester),
                         label = "设备编号"
                     )
 

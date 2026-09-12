@@ -300,20 +300,22 @@ private fun DeviceCard(viewModel: AppViewModel, onDeviceAddClick: () -> Unit) {
         }
     }
 
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.defaultColors(
-            color = MiuixTheme.colorScheme.primaryContainer.copy(alpha = 0.25f),
-            contentColor = MiuixTheme.colorScheme.onSurface
-        )
-    ) {
-        Text(
-            text = "长按设备创建快捷设置图块。",
-            style = MiuixTheme.textStyles.body2,
-            color = MiuixTheme.colorScheme.primary,
-            fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.padding(16.dp)
-        )
+    if (devices.isNotEmpty() && !viewModel.homeTileCreated) {
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.defaultColors(
+                color = MiuixTheme.colorScheme.primaryContainer.copy(alpha = 0.25f),
+                contentColor = MiuixTheme.colorScheme.onSurface
+            )
+        ) {
+            Text(
+                text = "长按设备创建快捷设置图块。",
+                style = MiuixTheme.textStyles.body2,
+                color = MiuixTheme.colorScheme.primary,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.padding(16.dp)
+            )
+        }
     }
 
     // Toggle device confirmation dialog
@@ -520,6 +522,9 @@ private fun DeviceCard(viewModel: AppViewModel, onDeviceAddClick: () -> Unit) {
                                 val id = tileDeviceId
                                 if (id != null) {
                                     DeviceTile.bind(id, tileDeviceName) { result ->
+                                        if (result == DeviceTileResult.ADDED || result == DeviceTileResult.ALREADY_ADDED) {
+                                            viewModel.markHomeTileCreated()
+                                        }
                                         showToast(
                                             when (result) {
                                                 DeviceTileResult.ADDED -> "已添加设备快捷设置图块"

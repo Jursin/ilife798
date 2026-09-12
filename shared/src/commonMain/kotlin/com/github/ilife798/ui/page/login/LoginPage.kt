@@ -2,6 +2,7 @@ package com.github.ilife798.ui.page.login
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -49,8 +50,15 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.overScrollVertical
 import top.yukonga.miuix.kmp.utils.scrollEndHaptic
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.TextFieldValue
 import com.github.ilife798.data.viewmodel.AppViewModel
 import com.github.ilife798.ui.theme.appBarBlur
 import com.github.ilife798.ui.theme.blurAppBarColor
@@ -58,15 +66,22 @@ import com.github.ilife798.ui.theme.rememberAppBlurBackdrop
 
 @Composable
 fun LoginPage(viewModel: AppViewModel, isAlipay: Boolean = false, onBack: () -> Unit) {
-    var phone by remember { mutableStateOf("") }
+    val account = viewModel.state.account
+    val accountInfo = viewModel.state.accountInfo
+    var phone by remember {
+        val initial = account.phone.ifEmpty { accountInfo.pn }
+        mutableStateOf(TextFieldValue(text = initial, selection = TextRange(initial.length)))
+    }
     var graphCode by remember { mutableStateOf("") }
     var smsCode by remember { mutableStateOf("") }
     val isLoading = viewModel.isLoading
     val errorMessage = viewModel.errorMessage
     val captchaImage = viewModel.captchaImage
     val smsSent = viewModel.smsSent
-    val account = viewModel.state.account
     val dynamicColor = viewModel.state.dynamicColor
+    val phoneFocusRequester = remember { FocusRequester() }
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val focusManager = LocalFocusManager.current
 
     // Local countdown - cancelled when leaving page
     var smsCountdown by remember { mutableIntStateOf(0) }
@@ -93,6 +108,22 @@ fun LoginPage(viewModel: AppViewModel, isAlipay: Boolean = false, onBack: () -> 
     // 验证码刷新后清空旧输入
     LaunchedEffect(viewModel.captchaKey) {
         if (viewModel.captchaKey.isNotEmpty()) graphCode = ""
+    }
+
+    // 已有一次登录（本页或另一渠道）时，自动回填手机号，仅在输入框为空时填充，光标置于末尾
+    LaunchedEffect(account.phone, accountInfo.pn) {
+        if (phone.text.isEmpty()) {
+            val saved = account.phone.ifEmpty { accountInfo.pn }
+            if (saved.isNotEmpty()) {
+                phone = TextFieldValue(text = saved, selection = TextRange(saved.length))
+            }
+        }
+    }
+
+    // 进入页面自动聚焦手机号输入框并弹出键盘
+    LaunchedEffect(Unit) {
+        phoneFocusRequester.requestFocus()
+        keyboardController?.show()
     }
 
     val title = if (isAlipay) "积分登录" else "设备登录"
@@ -125,6 +156,12 @@ fun LoginPage(viewModel: AppViewModel, isAlipay: Boolean = false, onBack: () -> 
             modifier = Modifier
                 .fillMaxSize()
                 .captureForBlur(blurBackdrop)
+                .pointerInput(Unit) {
+                    detectTapGestures {
+                        focusManager.clearFocus()
+                        keyboardController?.hide()
+                    }
+                }
                 .nestedScroll(scrollBehavior.nestedScrollConnection)
                 .scrollEndHaptic()
                 .overScrollVertical()
@@ -137,8 +174,12 @@ fun LoginPage(viewModel: AppViewModel, isAlipay: Boolean = false, onBack: () -> 
             // Phone input
             TextField(
                 value = phone,
-                onValueChange = { if (it.length <= 11 && it.all { c -> c.isDigit() }) phone = it },
-                modifier = Modifier.fillMaxWidth(),
+                onValueChange = { new ->
+                    if (new.text.length <= 11 && new.text.all { c -> c.isDigit() }) phone = new
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .focusRequester(phoneFocusRequester),
                 label = "请输入手机号",
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 leadingIcon = {
@@ -222,7 +263,7 @@ fun LoginPage(viewModel: AppViewModel, isAlipay: Boolean = false, onBack: () -> 
                 Button(
                     modifier = Modifier.width(120.dp),
                     onClick = {
-                        viewModel.sendSmsCode(phone, graphCode)
+                        viewModel.sendSmsCode(phone.text, graphCode)
                         countdownJob?.cancel()
                         smsCountdown = 60
                         countdownJob = scope.launch {
@@ -233,7 +274,7 @@ fun LoginPage(viewModel: AppViewModel, isAlipay: Boolean = false, onBack: () -> 
                             smsCountdown = 0
                         }
                     },
-                    enabled = phone.length == 11 && graphCode.isNotBlank() && smsCountdown <= 0,
+                    enabled = phone.text.length == 11 && graphCode.isNotBlank() && smsCountdown <= 0,
                     colors = primaryButtonColors(dynamicColor)
                 ) {
                     Text(
@@ -254,7 +295,7 @@ fun LoginPage(viewModel: AppViewModel, isAlipay: Boolean = false, onBack: () -> 
             // Login button
             Button(
                 modifier = Modifier.fillMaxWidth(),
-                onClick = { viewModel.login(phone, smsCode, isAlipay) },
+                onClick = { viewModel.login(phone.text, smsCode, isAlipay) },
                 enabled = !isLoading && smsCode.isNotEmpty() && smsSent,
                 colors = primaryButtonColors(dynamicColor)
             ) {

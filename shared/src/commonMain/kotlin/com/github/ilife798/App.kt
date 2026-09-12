@@ -1,6 +1,7 @@
 package com.github.ilife798
 
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.graphics.Color
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.github.ilife798.data.viewmodel.AppViewModel
 import com.github.ilife798.ui.navigation.MainScaffold
@@ -12,7 +13,10 @@ fun App() {
     val state = viewModel.state
     AppTheme(
         themeMode = state.themeMode,
-        dynamicColor = state.dynamicColor
+        customColor = state.customColor,
+        dynamicColor = state.dynamicColor,
+        paletteStyle = state.paletteStyle,
+        seedColor = Color(state.seedColor)
     ) {
         MainScaffold(viewModel = viewModel)
     }
