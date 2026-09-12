@@ -30,7 +30,9 @@ import com.github.ilife798.data.model.SpendingStats
 import com.github.ilife798.data.model.TaskRecord
 import com.github.ilife798.data.model.ThemeMode
 import com.github.ilife798.data.model.WalletAccount
+import com.github.ilife798.AppLifecycle
 import com.github.ilife798.DeviceTile
+import com.github.ilife798.getAppVersion
 import com.github.ilife798.toImageBitmap
 import com.github.ilife798.AppStorage
 import com.github.ilife798.StorageKeys
@@ -38,12 +40,25 @@ import com.github.ilife798.pay.AlipayPayResult
 import com.github.ilife798.pay.payWithAlipay
 import com.github.ilife798.logDebug
 import com.github.ilife798.showToast
+import com.github.ilife798.dismissToast
 import com.github.ilife798.util.QrCodeParser
 import com.github.ilife798.util.currentTimeMillis
 import com.github.ilife798.util.currentTimeFormatted
 import com.github.ilife798.util.formatTimestamp
 import com.github.ilife798.util.getDayOfWeek
 import com.github.ilife798.util.getTodayStart
+import com.github.ilife798.update.AppUpdate
+import com.github.ilife798.update.UpdateDialogState
+import com.github.ilife798.update.canInstallPackages
+import com.github.ilife798.update.cancelUpdateProgressNotification
+import com.github.ilife798.update.currentAbis
+import com.github.ilife798.update.deleteDownloadedApk
+import com.github.ilife798.update.downloadApkToFile
+import com.github.ilife798.update.downloadedApkPathIfValid
+import com.github.ilife798.update.installApk
+import com.github.ilife798.update.openInstallPermissionSettings
+import com.github.ilife798.update.requestNotificationPermission
+import com.github.ilife798.update.showUpdateProgressNotification
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -108,10 +123,31 @@ class AppViewModel : ViewModel() {
     var errorMessage by mutableStateOf<String?>(null)
         private set
 
+    // --- 检查更新 ---
+    var updateDialog by mutableStateOf<UpdateDialogState>(UpdateDialogState.None)
+        private set
+
+    var githubProxyUrl by mutableStateOf("")
+        private set
+
+    var developerMode by mutableStateOf(false)
+        private set
+
+    private var pendingUpdateUrl = ""
+    private var pendingUpdateSha256: String? = null
+    private var pendingUpdateSize = 0L
+    private var downloadedApkPath: String? = null
+    private var checkingUpdate = false
+    private var downloadingUpdate = false
+    private var progressDialogDismissed = false
+    private var lastUpdateProgress = 0f
+    private var updateJob: Job? = null
+
     init {
         loadSettings()
         loadHomeDeviceTypePref()
         loadSavedAccount()
+        AppLifecycle.onResumed = { onAppResumed() }
     }
 
     private fun loadSettings() {
@@ -129,6 +165,8 @@ class AppViewModel : ViewModel() {
                 themeMode = ThemeMode.entries.firstOrNull { it.name == storage.getString(StorageKeys.THEME_MODE) }
                     ?: ThemeMode.System
             )
+            githubProxyUrl = storage.getString(StorageKeys.GITHUB_PROXY) ?: ""
+            developerMode = storage.getBoolean(StorageKeys.DEVELOPER_MODE, false)
         } catch (e: Exception) {
             logError("loadSettings", e)
         }
@@ -1595,6 +1633,190 @@ class AppViewModel : ViewModel() {
             } finally {
                 homeRefreshing = false
             }
+        }
+    }
+
+    override fun onCleared() {
+        AppLifecycle.onResumed = null
+        super.onCleared()
+    }
+
+    fun checkForUpdate() {
+        if (downloadingUpdate) {
+            // 正在下载时再次点击：重新弹出下载进度对话框（同时收起通知）
+            reopenUpdateProgressDialog()
+            return
+        }
+        if (checkingUpdate) return
+        checkingUpdate = true
+        showToast("正在检查更新")
+        viewModelScope.launch {
+            try {
+                val release = AppUpdate.fetchLatestRelease()
+                val remoteVersion = release.tagName.removePrefix("v").trim()
+                if (AppUpdate.compareVersions(remoteVersion, getAppVersion()) > 0) {
+                    dismissToast()
+                    val asset = AppUpdate.selectAsset(release, currentAbis())
+                    if (asset == null || asset.browserDownloadUrl.isEmpty()) {
+                        showToast("暂无本设备安装包")
+                        return@launch
+                    }
+                    pendingUpdateUrl = asset.browserDownloadUrl
+                    pendingUpdateSha256 = asset.digest?.substringAfter(':')?.takeIf { it.isNotBlank() }
+                    pendingUpdateSize = asset.size
+                    updateDialog = UpdateDialogState.Available(remoteVersion)
+                } else {
+                    dismissToast()
+                    showToast("已是最新版")
+                }
+            } catch (e: Exception) {
+                logError("checkForUpdate", e)
+                dismissToast()
+                showToast("检查更新失败")
+            } finally {
+                checkingUpdate = false
+            }
+        }
+    }
+
+    fun startUpdate() {
+        if (downloadingUpdate) return
+        val url = pendingUpdateUrl
+        if (url.isEmpty()) {
+            updateDialog = UpdateDialogState.None
+            return
+        }
+        // 已下载的安装包与目标一致时直接安装，无需重复下载
+        val existing = downloadedApkPathIfValid(pendingUpdateSha256, pendingUpdateSize)
+        if (existing != null) {
+            downloadedApkPath = existing
+            progressDialogDismissed = false
+            afterDownload(existing)
+            return
+        }
+        downloadingUpdate = true
+        progressDialogDismissed = false
+        lastUpdateProgress = 0f
+        downloadedApkPath = null
+        updateDialog = UpdateDialogState.Downloading(0f)
+        updateJob = viewModelScope.launch {
+            try {
+                val path = downloadApkToFile(AppUpdate.applyProxy(url, githubProxyUrl)) { progress ->
+                    lastUpdateProgress = progress
+                    if (progressDialogDismissed) {
+                        showUpdateProgressNotification(progress)
+                    } else {
+                        updateDialog = UpdateDialogState.Downloading(progress)
+                    }
+                }
+                downloadedApkPath = path
+                cancelUpdateProgressNotification()
+                afterDownload(path)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                logError("startUpdate", e)
+                cancelUpdateProgressNotification()
+                showToast("下载失败：${e.message}")
+                updateDialog = UpdateDialogState.None
+            } finally {
+                downloadingUpdate = false
+                updateJob = null
+            }
+        }
+    }
+
+    fun hideUpdateProgressDialog() {
+        progressDialogDismissed = true
+        updateDialog = UpdateDialogState.None
+        requestNotificationPermission()
+        showUpdateProgressNotification(lastUpdateProgress)
+    }
+
+    fun reopenUpdateProgressDialog() {
+        if (!downloadingUpdate) return
+        progressDialogDismissed = false
+        cancelUpdateProgressNotification()
+        updateDialog = UpdateDialogState.Downloading(lastUpdateProgress)
+    }
+
+    fun stopUpdate() {
+        updateJob?.cancel()
+        updateJob = null
+        downloadingUpdate = false
+        progressDialogDismissed = false
+        lastUpdateProgress = 0f
+        downloadedApkPath = null
+        cancelUpdateProgressNotification()
+        deleteDownloadedApk()
+        updateDialog = UpdateDialogState.None
+    }
+
+    private fun afterDownload(path: String) {
+        if (canInstallPackages()) {
+            installApkOrPrompt(path)
+        } else {
+            openInstallPermissionSettings()
+            updateDialog = UpdateDialogState.AwaitingPermission
+        }
+    }
+
+    private fun installApkOrPrompt(path: String) {
+        updateDialog = if (installApk(path)) {
+            UpdateDialogState.None
+        } else {
+            UpdateDialogState.NeedPermission
+        }
+    }
+
+    private fun onAppResumed() {
+        if (updateDialog != UpdateDialogState.AwaitingPermission) return
+        val path = downloadedApkPath ?: return
+        if (canInstallPackages()) {
+            installApkOrPrompt(path)
+        } else {
+            updateDialog = UpdateDialogState.NeedPermission
+        }
+    }
+
+    fun openInstallSettings() {
+        val path = downloadedApkPath
+        if (path != null && canInstallPackages()) {
+            installApkOrPrompt(path)
+        } else {
+            openInstallPermissionSettings()
+            updateDialog = UpdateDialogState.AwaitingPermission
+        }
+    }
+
+    fun dismissUpdateDialog() {
+        updateDialog = UpdateDialogState.None
+    }
+
+    fun setGithubProxy(url: String) {
+        githubProxyUrl = url.trim()
+        try {
+            AppStorage.instance.saveString(StorageKeys.GITHUB_PROXY, githubProxyUrl)
+        } catch (e: Exception) {
+            logError("setGithubProxy", e)
+        }
+    }
+
+    fun enableDeveloperMode() {
+        developerMode = true
+        try {
+            AppStorage.instance.saveBoolean(StorageKeys.DEVELOPER_MODE, true)
+        } catch (e: Exception) {
+            logError("enableDeveloperMode", e)
+        }
+    }
+
+    fun disableDeveloperMode() {
+        developerMode = false
+        try {
+            AppStorage.instance.saveBoolean(StorageKeys.DEVELOPER_MODE, false)
+        } catch (e: Exception) {
+            logError("disableDeveloperMode", e)
         }
     }
 }

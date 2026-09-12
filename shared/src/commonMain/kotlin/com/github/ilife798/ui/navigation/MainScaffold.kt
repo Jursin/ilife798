@@ -45,6 +45,7 @@ import com.github.ilife798.ui.theme.captureForBlur
 import com.github.ilife798.ui.theme.rememberAppBlurBackdrop
 import com.github.ilife798.data.viewmodel.AppViewModel
 import com.github.ilife798.AppShortcut
+import com.github.ilife798.AppUpdateIntent
 import com.github.ilife798.ui.page.home.HomePage
 import com.github.ilife798.ui.page.tasks.TasksPage
 import com.github.ilife798.ui.page.me.MePage
@@ -172,6 +173,16 @@ fun MainScaffold(viewModel: AppViewModel) {
         AppShortcut.consumeStartDevice()
     }
 
+    // 点击“正在下载”通知：回到“我的”页并重新弹出下载对话框
+    val updateRequestId = AppUpdateIntent.showRequestId
+    LaunchedEffect(updateRequestId) {
+        if (updateRequestId <= 0) return@LaunchedEffect
+        while (backStack.size > 1) backStack.removeLastOrNull()
+        mainPagerState.animateToPage(2)
+        viewModel.reopenUpdateProgressDialog()
+        AppUpdateIntent.consume()
+    }
+
     LaunchedEffect(pagerState.currentPage) {
         mainPagerState.syncPage()
         when (pagerState.currentPage) {
@@ -273,8 +284,7 @@ fun MainScaffold(viewModel: AppViewModel) {
                 NavEntry(interceptPredictiveBack, onBack) {
                     AccountPage(
                         viewModel = viewModel,
-                        onBack = onBack,
-                        onLoginClick = { isAlipay -> navigate(Page.Login(isAlipay = isAlipay)) }
+                        onBack = onBack
                     )
                 }
             }

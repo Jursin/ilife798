@@ -50,12 +50,10 @@ import com.github.ilife798.ui.theme.blurAppBarColor
 import com.github.ilife798.ui.theme.captureForBlur
 import com.github.ilife798.ui.theme.rememberAppBlurBackdrop
 
-private enum class EmptyAction { EDIT, LOGIN, NONE }
-
-private enum class CredentialField(val key: String, val title: String, val emptyAction: EmptyAction) {
-    APP_TOKEN("appToken", "设备控制", EmptyAction.EDIT),
-    TOKEN("token", "积分任务", EmptyAction.LOGIN),
-    UID("uid", "用户 ID", EmptyAction.NONE)
+private enum class CredentialField(val key: String, val title: String) {
+    APP_TOKEN("appToken", "设备控制"),
+    TOKEN("token", "积分任务"),
+    UID("uid", "用户 ID")
 }
 
 private fun valueOf(account: Account, field: CredentialField): String = when (field) {
@@ -72,8 +70,7 @@ private fun maskCredential(value: String): String {
 @Composable
 fun AccountPage(
     viewModel: AppViewModel,
-    onBack: () -> Unit,
-    onLoginClick: (isAlipay: Boolean) -> Unit = {}
+    onBack: () -> Unit
 ) {
     val account = viewModel.state.account
     val scrollBehavior = MiuixScrollBehavior()
@@ -118,36 +115,27 @@ fun AccountPage(
                     CredentialField.entries.forEach { field ->
                         val value = valueOf(account, field)
                         val display = if (value.isEmpty()) "-" else maskCredential(value)
-                        val onTap = {
-                            if (value.isNotEmpty()) {
-                                if (copyTextToClipboard(value)) showToast("已复制 ${field.key}")
-                                else showToast("复制失败")
-                            } else when (field.emptyAction) {
-                                EmptyAction.EDIT -> {
-                                    inputValue = ""
-                                    editingField = field
-                                }
-
-                                EmptyAction.LOGIN -> onLoginClick(true)
-                                EmptyAction.NONE -> {}
-                            }
+                        val copy = {
+                            if (copyTextToClipboard(value)) showToast("已复制 ${field.key}")
+                            else showToast("复制失败")
+                        }
+                        val edit = {
+                            inputValue = value
+                            editingField = field
                         }
                         if (field == CredentialField.UID) {
                             BasicComponent(
                                 title = field.title,
                                 summary = "${field.key}: $display",
-                                onClick = onTap
+                                onClick = { if (value.isNotEmpty()) copy() }
                             )
                         } else {
                             BasicComponent(
                                 title = field.title,
                                 summary = "${field.key}: $display",
                                 modifier = Modifier.combinedClickable(
-                                    onClick = { onTap() },
-                                    onLongClick = {
-                                        inputValue = value
-                                        editingField = field
-                                    }
+                                    onClick = { if (value.isNotEmpty()) copy() else edit() },
+                                    onLongClick = edit
                                 )
                             )
                         }
@@ -163,7 +151,7 @@ fun AccountPage(
                 )
             ) {
                 Text(
-                    text = "设备控制为空时点击弹出输入对话框，积分任务为空时点击进入积分登录页面。有值时点击设备控制/积分任务/用户 ID 复制对应值，长按设备控制/积分任务弹出输入框。",
+                    text = "设备控制/积分任务为空时点击弹出输入对话框，有值时点击复制，长按弹出输入对话框。\n用户 ID 有值时点击复制。",
                     style = MiuixTheme.textStyles.body2,
                     color = MiuixTheme.colorScheme.primary,
                     fontWeight = FontWeight.SemiBold,

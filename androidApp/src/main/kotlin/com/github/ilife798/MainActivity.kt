@@ -6,6 +6,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import com.github.ilife798.data.api.ApiConfig
+import com.github.ilife798.update.ACTION_SHOW_UPDATE
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -34,12 +35,18 @@ class MainActivity : ComponentActivity() {
         handleIntent(intent)
     }
 
+    override fun onResume() {
+        super.onResume()
+        AppLifecycle.notifyResumed()
+    }
+
     private fun handleIntent(intent: Intent?) {
         when (intent?.action) {
             ACTION_SCAN -> AppShortcut.requestScan()
             ACTION_START_DEVICE -> {
                 intent.getStringExtra(EXTRA_DEVICE_ID)?.let { AppShortcut.requestStartDevice(it) }
             }
+            ACTION_SHOW_UPDATE -> AppUpdateIntent.requestShow()
         }
     }
 

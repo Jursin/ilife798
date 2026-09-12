@@ -7,6 +7,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -74,6 +75,8 @@ import com.github.ilife798.data.model.PaletteStyle
 import com.github.ilife798.data.viewmodel.AppViewModel
 import com.github.ilife798.getAppVersion
 import com.github.ilife798.getAppVersionCode
+import com.github.ilife798.showToast
+import com.github.ilife798.util.currentTimeMillis
 import com.github.ilife798.ui.theme.ColorSwatchPreview
 import com.github.ilife798.ui.theme.PresetColors
 import com.github.ilife798.ui.theme.WindowBlurEffect
@@ -148,7 +151,7 @@ private fun AccountSection(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clickable { onAccountClick() }
+                .then(if (viewModel.developerMode) Modifier.clickable { onAccountClick() } else Modifier)
                 .padding(16.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically
@@ -326,6 +329,9 @@ private fun SettingsSection(viewModel: AppViewModel, onLicenseClick: () -> Unit)
         )
     }
     var showDisclaimerDialog by remember { mutableStateOf(false) }
+    var showGithubProxyDialog by remember { mutableStateOf(false) }
+    var versionTapCount by remember { mutableIntStateOf(0) }
+    var lastVersionTapAt by remember { mutableStateOf(0L) }
 
     SmallTitle(text = "设置", insideMargin = PaddingValues(12.dp, 8.dp))
     Card(modifier = Modifier.fillMaxWidth()) {
@@ -434,7 +440,32 @@ private fun SettingsSection(viewModel: AppViewModel, onLicenseClick: () -> Unit)
         Column {
             BasicComponent(
                 title = "版本",
-                summary = "${getAppVersion()}(${getAppVersionCode()})"
+                summary = "${getAppVersion()}(${getAppVersionCode()})",
+                modifier = Modifier.combinedClickable(
+                    onClick = {
+                        val now = currentTimeMillis()
+                        versionTapCount = if (now - lastVersionTapAt > 2000L) 1 else versionTapCount + 1
+                        lastVersionTapAt = now
+                        if (versionTapCount >= 5) {
+                            versionTapCount = 0
+                            if (viewModel.developerMode) {
+                                viewModel.disableDeveloperMode()
+                                showToast("已关闭开发者模式")
+                            } else {
+                                viewModel.enableDeveloperMode()
+                                showToast("已启用开发者模式")
+                            }
+                        }
+                    }
+                )
+            )
+            BasicComponent(
+                title = "检查更新",
+                summary = "从 GitHub 检查最新版本，长按可设置加速地址",
+                modifier = Modifier.combinedClickable(
+                    onClick = { viewModel.checkForUpdate() },
+                    onLongClick = { showGithubProxyDialog = true }
+                )
             )
             BasicComponent(
                 title = "查看源代码",
@@ -510,6 +541,12 @@ private fun SettingsSection(viewModel: AppViewModel, onLicenseClick: () -> Unit)
             }
         )
     }
+
+    UpdateDialogs(
+        viewModel = viewModel,
+        showGithubProxyDialog = showGithubProxyDialog,
+        onDismissGithubProxyDialog = { showGithubProxyDialog = false }
+    )
 }
 
 @Composable

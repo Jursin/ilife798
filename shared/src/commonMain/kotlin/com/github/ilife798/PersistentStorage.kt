@@ -27,6 +27,8 @@ object StorageKeys {
     const val PREDICTIVE_BACK = "setting_predictive_back"
     const val THEME_MODE = "setting_theme_mode"
     const val HOME_DEVICE_TYPE = "home_device_type"
+    const val GITHUB_PROXY = "setting_github_proxy"
+    const val DEVELOPER_MODE = "setting_developer_mode"
 }
 
 object AppStorage {
