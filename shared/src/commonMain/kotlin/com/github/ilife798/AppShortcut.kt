@@ -33,4 +33,16 @@ object AppShortcut {
     fun consumeStartDevice() {
         startDeviceId = null
     }
+
+    /** 桌面快捷方式“运行积分任务”触发的请求。 */
+    var runTasksRequestId by mutableIntStateOf(0)
+        private set
+
+    fun requestRunTasks() {
+        runTasksRequestId++
+    }
+
+    fun consumeRunTasks() {
+        runTasksRequestId = 0
+    }
 }

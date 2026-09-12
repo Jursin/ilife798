@@ -29,6 +29,7 @@ object StorageKeys {
     const val HOME_DEVICE_TYPE = "home_device_type"
     const val GITHUB_PROXY = "setting_github_proxy"
     const val DEVELOPER_MODE = "setting_developer_mode"
+    const val CHECK_UPDATE_ON_START = "setting_check_update_on_start"
 }
 
 object AppStorage {

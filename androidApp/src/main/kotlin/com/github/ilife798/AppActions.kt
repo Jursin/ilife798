@@ -5,6 +5,7 @@ import androidx.core.content.edit
 
 const val ACTION_SCAN = "com.github.ilife798.action.SCAN"
 const val ACTION_START_DEVICE = "com.github.ilife798.action.START_DEVICE"
+const val ACTION_RUN_TASKS = "com.github.ilife798.action.RUN_TASKS"
 const val EXTRA_DEVICE_ID = "com.github.ilife798.extra.DEVICE_ID"
 
 /** 快捷设置图块绑定的设备信息（进程间通过 SharedPreferences 共享给 TileService）。 */

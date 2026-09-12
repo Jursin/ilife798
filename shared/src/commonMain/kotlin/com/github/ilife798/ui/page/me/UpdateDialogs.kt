@@ -156,7 +156,7 @@ fun UpdateDialogs(
         WindowDialog(
             show = true,
             onDismissRequest = onDismissGithubProxyDialog,
-            title = "填写 GitHub 加速地址",
+            title = "设置 GitHub 加速地址",
             content = {
                 WindowBlurEffect(useBlur = viewModel.state.appBlur)
                 Column {

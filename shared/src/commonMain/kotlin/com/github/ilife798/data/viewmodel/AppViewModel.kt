@@ -134,6 +134,10 @@ class AppViewModel : ViewModel() {
     var developerMode by mutableStateOf(false)
         private set
 
+    // 启动时自动检查更新
+    var checkUpdateOnStart by mutableStateOf(true)
+        private set
+
     private var pendingUpdateUrl = ""
     private var pendingUpdateSha256: String? = null
     private var pendingUpdateSize = 0L
@@ -149,6 +153,10 @@ class AppViewModel : ViewModel() {
         loadHomeDeviceTypePref()
         loadSavedAccount()
         AppLifecycle.onResumed = { onAppResumed() }
+        viewModelScope.launch {
+            delay(1500.milliseconds)
+            if (checkUpdateOnStart) checkForUpdate(silent = true)
+        }
     }
 
     private fun loadSettings() {
@@ -156,7 +164,7 @@ class AppViewModel : ViewModel() {
             val storage = AppStorage.instance
             state = state.copy(
                 dynamicColor = storage.getBoolean(StorageKeys.DYNAMIC_COLOR, true),
-                customColor = storage.getBoolean(StorageKeys.CUSTOM_COLOR, false),
+                customColor = storage.getBoolean(StorageKeys.CUSTOM_COLOR, true),
                 paletteStyle = PaletteStyle.entries.firstOrNull { it.name == storage.getString(StorageKeys.PALETTE_STYLE) }
                     ?: PaletteStyle.TonalSpot,
                 seedColor = storage.getInt(StorageKeys.SEED_COLOR, DEFAULT_SEED_COLOR),
@@ -168,6 +176,7 @@ class AppViewModel : ViewModel() {
             )
             githubProxyUrl = storage.getString(StorageKeys.GITHUB_PROXY) ?: ""
             developerMode = storage.getBoolean(StorageKeys.DEVELOPER_MODE, false)
+            checkUpdateOnStart = storage.getBoolean(StorageKeys.CHECK_UPDATE_ON_START, true)
         } catch (e: Exception) {
             logError("loadSettings", e)
         }
@@ -1426,6 +1435,23 @@ class AppViewModel : ViewModel() {
         }
     }
 
+    // 桌面快捷方式“运行积分任务”：未登录/运行中/已完成时给出提示
+    fun runTasksFromShortcut() {
+        if (state.account.appToken.isEmpty() && state.account.token.isEmpty()) {
+            showToast("请先登录")
+            return
+        }
+        if (isLoading) {
+            showToast("积分任务正在运行")
+            return
+        }
+        if (state.taskCompleted) {
+            showToast("今日任务已完成")
+            return
+        }
+        runAllTasks()
+    }
+
     fun runAllTasks() {
         if (state.taskCompleted || isLoading) return
         val uid = state.account.uid
@@ -1662,7 +1688,7 @@ class AppViewModel : ViewModel() {
         super.onCleared()
     }
 
-    fun checkForUpdate() {
+    fun checkForUpdate(silent: Boolean = false) {
         if (downloadingUpdate) {
             // 正在下载时再次点击：重新弹出下载进度对话框（同时收起通知）
             reopenUpdateProgressDialog()
@@ -1670,7 +1696,7 @@ class AppViewModel : ViewModel() {
         }
         if (checkingUpdate) return
         checkingUpdate = true
-        showToast("正在检查更新")
+        if (!silent) showToast("正在检查更新")
         viewModelScope.launch {
             try {
                 val release = AppUpdate.fetchLatestRelease()
@@ -1679,21 +1705,23 @@ class AppViewModel : ViewModel() {
                     dismissToast()
                     val asset = AppUpdate.selectAsset(release, currentAbis())
                     if (asset == null || asset.browserDownloadUrl.isEmpty()) {
-                        showToast("暂无本设备安装包")
+                        if (!silent) showToast("暂无本设备安装包")
                         return@launch
                     }
                     pendingUpdateUrl = asset.browserDownloadUrl
                     pendingUpdateSha256 = asset.digest?.substringAfter(':')?.takeIf { it.isNotBlank() }
                     pendingUpdateSize = asset.size
                     updateDialog = UpdateDialogState.Available(remoteVersion)
-                } else {
+                } else if (!silent) {
                     dismissToast()
                     showToast("已是最新版")
                 }
             } catch (e: Exception) {
                 logError("checkForUpdate", e)
-                dismissToast()
-                showToast("检查更新失败")
+                if (!silent) {
+                    dismissToast()
+                    showToast("检查更新失败")
+                }
             } finally {
                 checkingUpdate = false
             }
@@ -1820,6 +1848,15 @@ class AppViewModel : ViewModel() {
             AppStorage.instance.saveString(StorageKeys.GITHUB_PROXY, githubProxyUrl)
         } catch (e: Exception) {
             logError("setGithubProxy", e)
+        }
+    }
+
+    fun setCheckUpdateOnStartEnabled(enabled: Boolean) {
+        checkUpdateOnStart = enabled
+        try {
+            AppStorage.instance.saveBoolean(StorageKeys.CHECK_UPDATE_ON_START, enabled)
+        } catch (e: Exception) {
+            logError("setCheckUpdateOnStartEnabled", e)
         }
     }
 

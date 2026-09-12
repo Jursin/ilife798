@@ -11,4 +11,15 @@
             android:targetClass="com.github.ilife798.MainActivity"
             android:targetPackage="com.github.ilife798" />
     </shortcut>
+    <shortcut
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_tasks"
+        android:shortcutId="run_tasks"
+        android:shortcutLongLabel="@string/shortcut_run_tasks_long"
+        android:shortcutShortLabel="@string/shortcut_run_tasks_short">
+        <intent
+            android:action="com.github.ilife798.action.RUN_TASKS"
+            android:targetClass="com.github.ilife798.MainActivity"
+            android:targetPackage="com.github.ilife798" />
+    </shortcut>
 </shortcuts>

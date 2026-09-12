@@ -85,6 +85,7 @@ import com.github.ilife798.ui.theme.blurAppBarColor
 import com.github.ilife798.ui.theme.rememberAppBlurBackdrop
 import top.yukonga.miuix.kmp.icon.extended.Create
 import top.yukonga.miuix.kmp.icon.extended.Notes
+import top.yukonga.miuix.kmp.preference.ArrowPreference
 
 @Composable
 fun MePage(
@@ -333,7 +334,7 @@ private fun SettingsSection(viewModel: AppViewModel, onLicenseClick: () -> Unit)
     var versionTapCount by remember { mutableIntStateOf(0) }
     var lastVersionTapAt by remember { mutableStateOf(0L) }
 
-    SmallTitle(text = "设置", insideMargin = PaddingValues(12.dp, 8.dp))
+    SmallTitle(text = "外观设置", insideMargin = PaddingValues(12.dp, 8.dp))
     Card(modifier = Modifier.fillMaxWidth()) {
         Column {
             OverlayDropdownPreference(
@@ -435,6 +436,31 @@ private fun SettingsSection(viewModel: AppViewModel, onLicenseClick: () -> Unit)
             )
         }
     }
+    SmallTitle(text = "更新设置", insideMargin = PaddingValues(12.dp, 8.dp))
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column {
+            ArrowPreference(
+                title = "检查更新",
+                summary = "从 GitHub 检查最新版本",
+                onClick = { viewModel.checkForUpdate() }
+            )
+            BasicComponent(
+                title = "启动时检查更新",
+                summary = "打开应用时自动检查新版本",
+                endActions = {
+                    Switch(
+                        checked = viewModel.checkUpdateOnStart,
+                        onCheckedChange = { viewModel.setCheckUpdateOnStartEnabled(it) }
+                    )
+                }
+            )
+            ArrowPreference(
+                title = "加速地址",
+                summary = viewModel.githubProxyUrl.ifBlank { "设置 GitHub 加速地址" },
+                onClick = { showGithubProxyDialog = true }
+            )
+        }
+    }
     SmallTitle(text = "关于", insideMargin = PaddingValues(12.dp, 8.dp))
     Card(modifier = Modifier.fillMaxWidth()) {
         Column {
@@ -459,30 +485,22 @@ private fun SettingsSection(viewModel: AppViewModel, onLicenseClick: () -> Unit)
                     }
                 )
             )
-            BasicComponent(
-                title = "检查更新",
-                summary = "从 GitHub 检查最新版本，长按可设置加速地址",
-                modifier = Modifier.combinedClickable(
-                    onClick = { viewModel.checkForUpdate() },
-                    onLongClick = { showGithubProxyDialog = true }
-                )
-            )
-            BasicComponent(
+            ArrowPreference(
                 title = "查看源代码",
                 summary = "在 GitHub 上查看源代码",
                 onClick = { uriHandler.openUri("https://github.com/Jursin/ilife798") }
             )
-            BasicComponent(
+            ArrowPreference(
                 title = "开放源代码许可",
                 summary = "查看应用所使用的第三方开源库及其许可证信息",
                 onClick = onLicenseClick
             )
-            BasicComponent(
+            ArrowPreference(
                 title = "免责声明",
                 summary = "查看使用本应用的免责声明",
                 onClick = { showDisclaimerDialog = true }
             )
-            BasicComponent(
+            ArrowPreference(
                 title = "赞助支持",
                 summary = "在爱发电赞助我",
                 onClick = { uriHandler.openUri("https://afdian.com/a/jursin") }

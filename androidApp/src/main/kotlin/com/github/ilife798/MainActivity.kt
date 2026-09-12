@@ -47,6 +47,7 @@ class MainActivity : ComponentActivity() {
             ACTION_START_DEVICE -> {
                 intent.getStringExtra(EXTRA_DEVICE_ID)?.let { AppShortcut.requestStartDevice(it) }
             }
+            ACTION_RUN_TASKS -> AppShortcut.requestRunTasks()
             ACTION_SHOW_UPDATE -> AppUpdateIntent.requestShow()
             RunNotificationIntents.ACTION_OPEN_HOME -> RunNotificationIntent.requestOpenHome()
             RunNotificationIntents.ACTION_STOP_DEVICE -> {

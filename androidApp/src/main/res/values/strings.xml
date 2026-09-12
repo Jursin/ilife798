@@ -2,5 +2,7 @@
     <string name="app_name">ILife798</string>
     <string name="shortcut_scan_short">扫一扫</string>
     <string name="shortcut_scan_long">扫描二维码</string>
+    <string name="shortcut_run_tasks_short">积分任务</string>
+    <string name="shortcut_run_tasks_long">运行积分任务</string>
     <string name="tile_device_label">设备快捷启动</string>
 </resources>

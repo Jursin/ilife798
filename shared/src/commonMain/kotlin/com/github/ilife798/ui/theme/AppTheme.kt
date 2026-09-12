@@ -14,7 +14,7 @@ import top.yukonga.miuix.kmp.theme.ThemeController
 @Composable
 fun AppTheme(
     themeMode: ThemeMode = ThemeMode.System,
-    customColor: Boolean = false,
+    customColor: Boolean = true,
     dynamicColor: Boolean = true,
     paletteStyle: PaletteStyle = PaletteStyle.TonalSpot,
     seedColor: Color = Color(0xFF6750A4),

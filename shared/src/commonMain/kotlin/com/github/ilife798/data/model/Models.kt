@@ -181,7 +181,7 @@ data class AppState(
     val taskCompleted: Boolean = false,
     val taskLogs: List<String> = emptyList(),
     val dynamicColor: Boolean = true,
-    val customColor: Boolean = false,
+    val customColor: Boolean = true,
     val paletteStyle: PaletteStyle = PaletteStyle.TonalSpot,
     val seedColor: Int = DEFAULT_SEED_COLOR,
     val floatingNav: Boolean = false,

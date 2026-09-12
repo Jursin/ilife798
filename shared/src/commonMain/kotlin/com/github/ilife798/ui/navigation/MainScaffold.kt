@@ -174,6 +174,16 @@ fun MainScaffold(viewModel: AppViewModel) {
         AppShortcut.consumeStartDevice()
     }
 
+    // 桌面快捷方式“运行积分任务”：跳转到任务页并开始运行
+    val runTasksRequestId = AppShortcut.runTasksRequestId
+    LaunchedEffect(runTasksRequestId) {
+        if (runTasksRequestId <= 0) return@LaunchedEffect
+        while (backStack.size > 1) backStack.removeLastOrNull()
+        mainPagerState.animateToPage(1)
+        viewModel.runTasksFromShortcut()
+        AppShortcut.consumeRunTasks()
+    }
+
     // 点击“正在下载”通知：回到“我的”页并重新弹出下载对话框
     val updateRequestId = AppUpdateIntent.showRequestId
     LaunchedEffect(updateRequestId) {
