@@ -46,6 +46,7 @@ import com.github.ilife798.ui.theme.rememberAppBlurBackdrop
 import com.github.ilife798.data.viewmodel.AppViewModel
 import com.github.ilife798.AppShortcut
 import com.github.ilife798.AppUpdateIntent
+import com.github.ilife798.RunNotificationIntent
 import com.github.ilife798.ui.page.home.HomePage
 import com.github.ilife798.ui.page.tasks.TasksPage
 import com.github.ilife798.ui.page.me.MePage
@@ -181,6 +182,44 @@ fun MainScaffold(viewModel: AppViewModel) {
         mainPagerState.animateToPage(2)
         viewModel.reopenUpdateProgressDialog()
         AppUpdateIntent.consume()
+    }
+
+    // 点击设备运行通知正文：仅回到首页
+    val openHomeRequestId = RunNotificationIntent.openHomeRequestId
+    LaunchedEffect(openHomeRequestId) {
+        if (openHomeRequestId <= 0) return@LaunchedEffect
+        while (backStack.size > 1) backStack.removeLastOrNull()
+        mainPagerState.animateToPage(0)
+        RunNotificationIntent.consumeOpenHome()
+    }
+
+    // 点击设备运行通知“停止”按钮：回到首页并停止对应设备
+    val stopDeviceId = RunNotificationIntent.stopDeviceId
+    LaunchedEffect(stopDeviceId) {
+        val id = stopDeviceId ?: return@LaunchedEffect
+        while (backStack.size > 1) backStack.removeLastOrNull()
+        mainPagerState.animateToPage(0)
+        viewModel.stopDevice(id)
+        RunNotificationIntent.consumeStopDevice()
+    }
+
+    // 点击积分任务通知正文：跳转到任务页
+    val openTasksRequestId = RunNotificationIntent.openTasksRequestId
+    LaunchedEffect(openTasksRequestId) {
+        if (openTasksRequestId <= 0) return@LaunchedEffect
+        while (backStack.size > 1) backStack.removeLastOrNull()
+        mainPagerState.animateToPage(1)
+        RunNotificationIntent.consumeOpenTasks()
+    }
+
+    // 点击积分任务通知“停止”按钮：跳转到任务页并停止任务
+    val stopTasksRequestId = RunNotificationIntent.stopTasksRequestId
+    LaunchedEffect(stopTasksRequestId) {
+        if (stopTasksRequestId <= 0) return@LaunchedEffect
+        while (backStack.size > 1) backStack.removeLastOrNull()
+        mainPagerState.animateToPage(1)
+        viewModel.stopTasks()
+        RunNotificationIntent.consumeStopTasks()
     }
 
     LaunchedEffect(pagerState.currentPage) {

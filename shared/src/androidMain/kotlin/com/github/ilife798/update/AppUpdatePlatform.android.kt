@@ -139,7 +139,10 @@ private fun ensureUpdateChannel(context: Context) {
                 UPDATE_CHANNEL_ID,
                 "应用更新",
                 NotificationManager.IMPORTANCE_LOW
-            )
+            ).apply {
+                description = "下载更新期间显示下载进度"
+                setShowBadge(false)
+            }
         )
     }
 }

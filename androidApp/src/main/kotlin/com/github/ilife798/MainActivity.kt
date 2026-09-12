@@ -22,6 +22,7 @@ class MainActivity : ComponentActivity() {
             clientId = BuildConfig.API_CID
         )
 
+        RunNotifications.ensureInitialized()
         handleIntent(intent)
 
         setContent {
@@ -47,6 +48,13 @@ class MainActivity : ComponentActivity() {
                 intent.getStringExtra(EXTRA_DEVICE_ID)?.let { AppShortcut.requestStartDevice(it) }
             }
             ACTION_SHOW_UPDATE -> AppUpdateIntent.requestShow()
+            RunNotificationIntents.ACTION_OPEN_HOME -> RunNotificationIntent.requestOpenHome()
+            RunNotificationIntents.ACTION_STOP_DEVICE -> {
+                intent.getStringExtra(RunNotificationIntents.EXTRA_DEVICE_ID)
+                    ?.let { RunNotificationIntent.requestStopDevice(it) }
+            }
+            RunNotificationIntents.ACTION_OPEN_TASKS -> RunNotificationIntent.requestOpenTasks()
+            RunNotificationIntents.ACTION_STOP_TASKS -> RunNotificationIntent.requestStopTasks()
         }
     }
 

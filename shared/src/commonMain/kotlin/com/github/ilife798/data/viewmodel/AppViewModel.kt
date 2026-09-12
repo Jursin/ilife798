@@ -32,6 +32,7 @@ import com.github.ilife798.data.model.ThemeMode
 import com.github.ilife798.data.model.WalletAccount
 import com.github.ilife798.AppLifecycle
 import com.github.ilife798.DeviceTile
+import com.github.ilife798.RunNotifications
 import com.github.ilife798.getAppVersion
 import com.github.ilife798.toImageBitmap
 import com.github.ilife798.AppStorage
@@ -755,18 +756,20 @@ class AppViewModel : ViewModel() {
         return ""
     }
 
-    fun toggleDeviceRunning(deviceId: String, args: String = "") {
+    fun toggleDeviceRunning(deviceId: String, args: String = "", forceStop: Boolean = false) {
         val useApp = state.account.appToken.isNotEmpty()
         val token = if (useApp) state.account.appToken else state.account.token
         val appType = if (useApp) "1,1" else "1,5"
         if (token.isEmpty()) return
+        val deviceName = state.devices.firstOrNull { it.id == deviceId }?.name?.ifEmpty { deviceId } ?: deviceId
         pollingDeviceId = deviceId
         viewModelScope.launch {
             try {
                 if (!isCurrentToken(token)) return@launch
-                val currentStatus = api.getDevStatus(token, deviceId, appType)
-                val starting = currentStatus?.geneStatus == 99
+                val currentStatus = if (forceStop) null else api.getDevStatus(token, deviceId, appType)
+                val starting = !forceStop && currentStatus?.geneStatus == 99
                 val result = if (starting) {
+                    requestNotificationPermission()
                     api.setUseScore(token, useScore = 1, appType = appType)
                     // 优先钱袋支付（91），余额不足等失败时自动切换支付宝免密支付（21）
                     val wallet = api.devStart(token, deviceId, appType, ptype = PAY_TYPE_WALLET, args = args, reportError = false)
@@ -780,6 +783,7 @@ class AppViewModel : ViewModel() {
                 }
                 if (!result.success) return@launch
                 showToast(if (starting) "设备已启动" else "设备已停止")
+                RunNotifications.updateDevice(deviceId, deviceName, starting)
                 // 第一轮：5次 × 2.5秒
                 var newStatus: DevStatusResult? = null
                 var attempt = 0
@@ -810,12 +814,22 @@ class AppViewModel : ViewModel() {
                         ) else it
                     }
                 )
+                val isRunning = newStatus?.geneStatus?.let { it != 99 } ?: (currentStatus?.geneStatus?.let { it != 99 } ?: starting)
+                // 启动后以轮询结果校正，停止时已立即上报“已停止”
+                if (starting) {
+                    RunNotifications.updateDevice(deviceId, deviceName, isRunning)
+                }
             } catch (e: Exception) {
                 showToast("操作失败：${e.message}")
             } finally {
                 if (pollingDeviceId == deviceId) pollingDeviceId = null
             }
         }
+    }
+
+    // 通知“停止”按钮：强制停止对应设备（不依赖当前状态判断）
+    fun stopDevice(deviceId: String) {
+        toggleDeviceRunning(deviceId, forceStop = true)
     }
 
     // 积分/任务
@@ -1424,12 +1438,14 @@ class AppViewModel : ViewModel() {
         val isCurrentAccount = { state.account.appToken == startApp && state.account.token == startPoints }
         lastMissionsLoadTime = 0L
         lastScoreLoadTime = 0L
+        requestNotificationPermission()
         showToast("开始运行积分任务")
         taskJob = viewModelScope.launch {
             isLoading = true
             errorMessage = null
             state = state.copy(taskLogs = emptyList())
             rateLimiter.clear()
+            RunNotifications.updateTask(0)
             try {
                 addTaskLog("正在加载任务列表...")
                 val merged = fetchMergedMissions()
@@ -1462,6 +1478,7 @@ class AppViewModel : ViewModel() {
                         val signResult = api.signIn(signToken, uid, weekDay, merged.dailyAdId)
                         if (signResult.success) {
                             gained += merged.dailyScore
+                            RunNotifications.updateTask(gained)
                             addTaskLog("每日签到: 成功 +${merged.dailyScore}分")
                         } else if (signResult.code == -98) {
                             addTaskLog("每日签到: 请求频繁，等待60秒重试...")
@@ -1469,6 +1486,7 @@ class AppViewModel : ViewModel() {
                             val retryResult = api.signIn(signToken, uid, weekDay, merged.dailyAdId)
                             if (retryResult.success) {
                                 gained += merged.dailyScore
+                                RunNotifications.updateTask(gained)
                                 addTaskLog("每日签到: 成功 +${merged.dailyScore}分")
                             } else {
                                 addTaskLog("每日签到: 失败 ${retryResult.message}")
@@ -1508,6 +1526,7 @@ class AppViewModel : ViewModel() {
                         if (execResult.success) {
                             executed++
                             gained += mission.score
+                            RunNotifications.updateTask(gained)
                             addTaskLog("[${mission.name}] ($round/$maxCount) 成功 +${mission.score}分")
                             missions = missions.map {
                                 if (it.adId == mission.adId) it.copy(dailyCompleted = it.dailyCompleted + 1) else it
@@ -1543,6 +1562,7 @@ class AppViewModel : ViewModel() {
                     errorMessage = "任务执行失败: ${e.message}"
                 }
             } finally {
+                RunNotifications.removeTask()
                 if (isCurrentAccount()) isLoading = false
                 if (taskJob === coroutineContext[Job]) taskJob = null
             }
@@ -1554,6 +1574,7 @@ class AppViewModel : ViewModel() {
         taskJob?.cancel()
         taskJob = null
         isLoading = false
+        RunNotifications.removeTask()
         showToast("积分任务已停止")
     }
 
