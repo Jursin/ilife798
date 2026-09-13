@@ -208,7 +208,6 @@ class AppViewModel : ViewModel() {
                     isLoggedIn = true,
                     pointsLoginDone = storage.getBoolean(StorageKeys.POINTS_LOGIN_DONE),
                     uid = storage.getString(StorageKeys.UID) ?: "",
-                    eid = storage.getString(StorageKeys.EID) ?: "",
                     token = storage.getString(StorageKeys.TOKEN) ?: "",
                     appToken = storage.getString(StorageKeys.APP_TOKEN) ?: ""
                 )
@@ -249,7 +248,6 @@ class AppViewModel : ViewModel() {
             storage.saveString(StorageKeys.PHONE, account.phone)
             storage.saveBoolean(StorageKeys.POINTS_LOGIN_DONE, account.pointsLoginDone)
             storage.saveString(StorageKeys.UID, account.uid)
-            storage.saveString(StorageKeys.EID, account.eid)
             storage.saveString(StorageKeys.TOKEN, account.token)
             storage.saveString(StorageKeys.APP_TOKEN, account.appToken)
         } catch (e: Exception) {
@@ -323,8 +321,10 @@ class AppViewModel : ViewModel() {
             else -> return
         }
         val stillLoggedIn = updated.appToken.isNotEmpty() || updated.token.isNotEmpty()
+        // 两条凭据都清空后，uid 已无来源，一并清空
+        val cleared = if (stillLoggedIn) updated else updated.copy(uid = "")
         clearAccountData()
-        state = state.copy(account = updated.copy(isLoggedIn = stillLoggedIn))
+        state = state.copy(account = cleared.copy(isLoggedIn = stillLoggedIn))
         saveAccount()
         loadDeviceInfo(force = true)
         loadAccountInfo()
@@ -422,7 +422,6 @@ class AppViewModel : ViewModel() {
                             isLoggedIn = true,
                             pointsLoginDone = if (isAlipay) true else prev.pointsLoginDone,
                             uid = result.uid.ifEmpty { prev.uid },
-                            eid = result.eid.ifEmpty { prev.eid },
                             token = if (isAlipay) result.token else prev.token,
                             appToken = if (!isAlipay) result.token else prev.appToken
                         )
@@ -506,7 +505,6 @@ class AppViewModel : ViewModel() {
             storage.saveString(StorageKeys.PHONE, "")
             storage.saveBoolean(StorageKeys.POINTS_LOGIN_DONE, false)
             storage.saveString(StorageKeys.UID, "")
-            storage.saveString(StorageKeys.EID, "")
             storage.saveString(StorageKeys.TOKEN, "")
             storage.saveString(StorageKeys.APP_TOKEN, "")
         } catch (e: Exception) {
@@ -1046,6 +1044,35 @@ class AppViewModel : ViewModel() {
             } finally {
                 scoreRefreshing = false
             }
+        }
+    }
+
+    // --- 积分兑换 ---
+    var exchangeSubmitting by mutableStateOf(false)
+        private set
+
+    suspend fun submitScoreExchange(score: Int): DevResult {
+        val token = walletToken()
+        val wallet = state.wallets.firstOrNull { it.id == state.activeWalletId }
+        if (token.isEmpty() || wallet == null || wallet.eid.isEmpty()) {
+            return DevResult(false, -1, "钱包信息缺失，请重新进入")
+        }
+        exchangeSubmitting = true
+        return try {
+            val billId = api.exchangeScore(token, wallet.eid, score)
+                ?: return DevResult(false, -1, "")
+            val completed = api.isExchangeBillCompleted(token, billId)
+            loadWallet()
+            refreshScorePage()
+            if (completed) {
+                DevResult(true, 0, "兑换已完成，已兑换至「${wallet.name}」")
+            } else {
+                DevResult(false, -1, "兑换结果待确认，请先核对官方记录，勿重复兑换")
+            }
+        } catch (e: Exception) {
+            DevResult(false, -1, "兑换失败：${e.message}")
+        } finally {
+            exchangeSubmitting = false
         }
     }
 

@@ -15,7 +15,6 @@ object StorageKeys {
     const val IS_LOGGED_IN = "account_is_logged_in"
     const val POINTS_LOGIN_DONE = "account_points_login_done"
     const val UID = "account_uid"
-    const val EID = "account_eid"
     const val TOKEN = "account_token"
     const val APP_TOKEN = "account_app_token"
     const val DYNAMIC_COLOR = "setting_dynamic_color"

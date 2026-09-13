@@ -105,8 +105,7 @@ class IlifeApi(private val client: HttpClient = createHttpClient()) {
         val al = body["data"]?.jsonObject?.get("al")?.jsonObject
         val token = al?.get("token")?.jsonPrimitive?.content ?: ""
         val uid = al?.get("uid")?.jsonPrimitive?.content ?: ""
-        val eid = al?.get("eid")?.jsonPrimitive?.content ?: ""
-        return LoginResult(true, token = token, uid = uid, eid = eid)
+        return LoginResult(true, token = token, uid = uid)
     }
 
     // --- Account Info ---
@@ -566,6 +565,42 @@ class IlifeApi(private val client: HttpClient = createHttpClient()) {
         return parseDevResult(response.bodyAsText())
     }
 
+    // 积分兑换：将积分兑换为指定钱包余额，成功返回账单号用于核验结果
+    // POST /acc/score/score-use（设备登录凭据 ApplicationType=1,1）
+    suspend fun exchangeScore(token: String, endpointId: String, score: Int): String? {
+        if (endpointId.isEmpty() || score <= 0) return null
+        val payload = """{"ep":{"id":"$endpointId"},"score":$score,"type":1}"""
+        val response = client.post("${ApiConfig.baseUrl}/acc/score/score-use") {
+            contentType(ContentType.Application.Json)
+            setBody(payload)
+            header("Authorization", token)
+            header("ApplicationType", "1,1")
+        }
+        val body = json.parseToJsonElement(response.bodyAsText()).jsonObject
+        checkSessionExpired(body)
+        if (body["code"]?.jsonPrimitive?.content?.toIntOrNull() != 0) {
+            emitApiError(body["msg"]?.jsonPrimitive?.content)
+            return null
+        }
+        return (body["data"] as? JsonObject)?.get("sn")?.jsonPrimitive?.content
+            ?.takeIf { it.isNotEmpty() && it != "null" }
+    }
+
+    // 核验兑换账单是否已完成（status=3）
+    suspend fun isExchangeBillCompleted(token: String, billId: String): Boolean {
+        if (billId.isEmpty()) return false
+        val response = client.get("${ApiConfig.baseUrl}/bill/view-full") {
+            parameter("id", billId)
+            header("Authorization", token)
+            header("ApplicationType", "1,1")
+        }
+        val body = bodyJson(response, reportError = false)
+        if (body["code"]?.jsonPrimitive?.content?.toIntOrNull() != 0) return false
+        val bill = (body["data"] as? JsonObject)?.get("bill") as? JsonObject ?: return false
+        if (bill["id"]?.jsonPrimitive?.content != billId) return false
+        return bill["status"]?.jsonPrimitive?.content?.toIntOrNull() == 3
+    }
+
     private fun readScoreInt(obj: JsonObject, nested: JsonObject?): Int {
         val keys = listOf("score", "spend", "changeScore", "change_score", "amount", "value", "num", "points")
         for (key in keys) {
@@ -576,7 +611,7 @@ class IlifeApi(private val client: HttpClient = createHttpClient()) {
     }
 }
 
-data class LoginResult(val success: Boolean, val token: String = "", val uid: String = "", val eid: String = "", val error: String = "")
+data class LoginResult(val success: Boolean, val token: String = "", val uid: String = "", val error: String = "")
 data class AccountInfoDto(val id: String = "", val img: String = "", val name: String = "", val pn: String = "")
 data class TokenProbe(val appValid: Boolean, val mainValid: Boolean, val uid: String = "")
 data class DeviceDto(val id: String, val name: String, val status: Int = 0, val geneStatus: Int = 0, val dtype: Int = 0)

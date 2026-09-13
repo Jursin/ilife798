@@ -8,7 +8,6 @@ data class Account(
     val isLoggedIn: Boolean = false,
     val pointsLoginDone: Boolean = false,
     val uid: String = "",
-    val eid: String = "",
     val token: String = "",
     val appToken: String = ""
 )
