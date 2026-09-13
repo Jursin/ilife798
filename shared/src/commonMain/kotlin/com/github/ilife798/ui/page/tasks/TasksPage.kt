@@ -23,6 +23,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
@@ -55,12 +56,13 @@ import com.github.ilife798.ui.theme.rememberAppBlurBackdrop
 import com.github.ilife798.util.getDayOfWeek
 
 @Composable
-fun TasksPage(viewModel: AppViewModel, onLoginClick: (isAlipay: Boolean) -> Unit = {}) {
+fun TasksPage(viewModel: AppViewModel, onLoginClick: (isAlipay: Boolean) -> Unit = {}, bottomPadding: Dp) {
     val state = viewModel.state
     val missions = viewModel.missions
     val isLoading = viewModel.isLoading
     val scrollBehavior = MiuixScrollBehavior()
     val blurBackdrop = rememberAppBlurBackdrop(state.appBlur)
+    val isLoggedIn = state.account.appToken.isNotEmpty() || state.account.token.isNotEmpty()
     var showStopDialog by remember { mutableStateOf(false) }
 
     // Check if all tasks are already completed
@@ -107,19 +109,15 @@ fun TasksPage(viewModel: AppViewModel, onLoginClick: (isAlipay: Boolean) -> Unit
                     .verticalScroll(rememberScrollState())
                     .padding(paddingValues)
                     .padding(horizontal = 16.dp)
-                    .padding(top = 8.dp, bottom = 80.dp),
+                    .padding(top = 8.dp, bottom = bottomPadding),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Button(
                     modifier = Modifier.fillMaxWidth(),
                     onClick = {
-                        when {
-                            isLoading -> showStopDialog = true
-                            state.account.appToken.isEmpty() && state.account.token.isEmpty() -> showToast("请先登录")
-                            else -> viewModel.runAllTasks()
-                        }
+                        if (isLoading) showStopDialog = true else viewModel.runAllTasks()
                     },
-                    enabled = (!isLoading && !state.taskCompleted) || isLoading,
+                    enabled = isLoading || (isLoggedIn && !state.taskCompleted),
                     colors = ButtonDefaults.buttonColors()
                 ) {
                     if (isLoading) {
@@ -199,7 +197,6 @@ fun TasksPage(viewModel: AppViewModel, onLoginClick: (isAlipay: Boolean) -> Unit
                         }
                     }
                 } else {
-                    val isLoggedIn = state.account.appToken.isNotEmpty() || state.account.token.isNotEmpty()
                     Card(modifier = Modifier.fillMaxWidth()) {
                         Column(modifier = Modifier.padding(16.dp)) {
                             Text(

@@ -40,6 +40,7 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import top.yukonga.miuix.kmp.basic.BasicComponent
@@ -94,7 +95,9 @@ fun MePage(
     onScoreClick: () -> Unit = {},
     onAccountClick: () -> Unit = {},
     onBillClick: () -> Unit = {},
-    onLicenseClick: () -> Unit = {}
+    onLicenseClick: () -> Unit = {},
+    bottomPadding: Dp,
+    wideScreen: Boolean
 ) {
     val scrollBehavior = MiuixScrollBehavior()
     val blurBackdrop = rememberAppBlurBackdrop(viewModel.state.appBlur)
@@ -119,11 +122,11 @@ fun MePage(
                 .verticalScroll(rememberScrollState())
                 .padding(paddingValues)
                 .padding(horizontal = 16.dp)
-                .padding(top = 4.dp, bottom = 80.dp),
+                .padding(top = 4.dp, bottom = bottomPadding),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             AccountSection(viewModel, onLoginClick, onScoreClick, onAccountClick, onBillClick)
-            SettingsSection(viewModel, onLicenseClick)
+            SettingsSection(viewModel, onLicenseClick, wideScreen)
             Spacer(modifier = Modifier.height(16.dp))
         }
     }
@@ -316,7 +319,7 @@ private fun AccountSection(
 }
 
 @Composable
-private fun SettingsSection(viewModel: AppViewModel, onLicenseClick: () -> Unit) {
+private fun SettingsSection(viewModel: AppViewModel, onLicenseClick: () -> Unit, wideScreen: Boolean) {
     val state = viewModel.state
     val uriHandler = LocalUriHandler.current
     val themeOptions = listOf("跟随系统", "浅色", "深色")
@@ -424,16 +427,18 @@ private fun SettingsSection(viewModel: AppViewModel, onLicenseClick: () -> Unit)
                     onSelect = { viewModel.setSeedColor(it) }
                 )
             }
-            BasicComponent(
-                title = "悬浮底栏",
-                summary = "切换悬浮式底部导航栏",
-                endActions = {
-                    Switch(
-                        checked = state.floatingNav,
-                        onCheckedChange = { viewModel.setFloatingNav(it) }
-                    )
-                }
-            )
+            if (!wideScreen) {
+                BasicComponent(
+                    title = "悬浮底栏",
+                    summary = "切换悬浮式底部导航栏",
+                    endActions = {
+                        Switch(
+                            checked = state.floatingNav,
+                            onCheckedChange = { viewModel.setFloatingNav(it) }
+                        )
+                    }
+                )
+            }
         }
     }
     SmallTitle(text = "更新设置", insideMargin = PaddingValues(12.dp, 8.dp))

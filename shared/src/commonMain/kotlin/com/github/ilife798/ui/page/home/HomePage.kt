@@ -27,6 +27,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Card
@@ -70,7 +71,7 @@ import kotlin.math.abs
 import kotlin.math.round
 
 @Composable
-fun HomePage(viewModel: AppViewModel, onDeviceAddClick: () -> Unit = {}) {
+fun HomePage(viewModel: AppViewModel, onDeviceAddClick: () -> Unit = {}, bottomPadding: Dp) {
     val state = viewModel.state
     val scrollBehavior = MiuixScrollBehavior()
     val blurBackdrop = rememberAppBlurBackdrop(state.appBlur)
@@ -104,7 +105,7 @@ fun HomePage(viewModel: AppViewModel, onDeviceAddClick: () -> Unit = {}) {
                     .verticalScroll(rememberScrollState())
                     .padding(paddingValues)
                     .padding(horizontal = 16.dp)
-                    .padding(top = 8.dp, bottom = 80.dp),
+                    .padding(top = 8.dp, bottom = bottomPadding),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 val stats = viewModel.spendingStats
