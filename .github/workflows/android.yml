@@ -1,0 +1,164 @@
+name: Android CI and Release
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  APP_MODULE: androidApp
+
+jobs:
+  validate:
+    name: Validate Android build
+    if: github.event_name != 'push'
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android platform
+        run: sdkmanager 'platforms;android-37.0'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x ./gradlew
+
+      - name: Generate secrets.properties
+        env:
+          API_GATEWAY: ${{ secrets.API_GATEWAY }}
+          SIGN_SALT: ${{ secrets.SIGN_SALT }}
+          API_CID: ${{ secrets.API_CID }}
+        run: |
+          printf 'API_GATEWAY=%s\n' "$API_GATEWAY" > secrets.properties
+          printf 'SIGN_SALT=%s\n' "$SIGN_SALT" >> secrets.properties
+          printf 'API_CID=%s\n' "$API_CID" >> secrets.properties
+
+      - name: Check formatting, tests and lint
+        run: ./gradlew spotlessCheck testDebugUnitTest testAndroidHostTest lintDebug --no-daemon --stacktrace
+
+      - name: Build debug APKs
+        run: ./gradlew assembleDebug --no-daemon --stacktrace
+
+      - name: Upload debug APKs
+        uses: actions/upload-artifact@v4
+        with:
+          name: ilife798-debug-apk
+          path: ${{ env.APP_MODULE }}/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+
+  release:
+    name: Build and publish Android release
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android platform
+        run: sdkmanager 'platforms;android-37.0'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x ./gradlew
+
+      - name: Verify release tag matches app version
+        run: |
+          version_name="$(sed -n 's/^[[:space:]]*versionName = "\(.*\)"/\1/p' "$APP_MODULE/build.gradle.kts" | head -n 1)"
+          test "$GITHUB_REF_NAME" = "v$version_name"
+
+      - name: Generate secrets.properties
+        env:
+          API_GATEWAY: ${{ secrets.API_GATEWAY }}
+          SIGN_SALT: ${{ secrets.SIGN_SALT }}
+          API_CID: ${{ secrets.API_CID }}
+        run: |
+          printf 'API_GATEWAY=%s\n' "$API_GATEWAY" > secrets.properties
+          printf 'SIGN_SALT=%s\n' "$SIGN_SALT" >> secrets.properties
+          printf 'API_CID=%s\n' "$API_CID" >> secrets.properties
+
+      - name: Configure release signing
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          test -n "$ANDROID_KEYSTORE_BASE64"
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/release.keystore"
+          {
+            printf 'signing.storeFile=%s\n' "$RUNNER_TEMP/release.keystore"
+            printf 'signing.storePassword=%s\n' "$ANDROID_KEYSTORE_PASSWORD"
+            printf 'signing.keyAlias=%s\n' "$ANDROID_KEY_ALIAS"
+            printf 'signing.keyPassword=%s\n' "$ANDROID_KEY_PASSWORD"
+          } > local.properties
+
+      - name: Run tests, lint and build signed release APKs
+        run: ./gradlew testDebugUnitTest testAndroidHostTest lintDebug assembleRelease --no-daemon --stacktrace
+
+      - name: Verify release APK signatures
+        run: |
+          apksigner="$(ls "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -n 1)"
+          for apk in "$APP_MODULE"/build/outputs/apk/release/*.apk; do
+            "$apksigner" verify --print-certs "$apk"
+          done
+
+      - name: Preserve R8 mapping
+        uses: actions/upload-artifact@v4
+        with:
+          name: ilife798-${{ github.ref_name }}-r8-mapping
+          path: ${{ env.APP_MODULE }}/build/outputs/mapping/release/mapping.txt
+          if-no-files-found: error
+
+      - name: Prepare release APKs
+        run: |
+          mkdir -p "$RUNNER_TEMP/release-assets"
+          for apk in "$APP_MODULE"/build/outputs/apk/release/*.apk; do
+            abi="$(basename "$apk" | sed -E 's/^ilife798-android-(.*)-release\.apk$/\1/')"
+            cp "$apk" "$RUNNER_TEMP/release-assets/ilife798-${GITHUB_REF_NAME}-${abi}.apk"
+          done
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          assets=("$RUNNER_TEMP"/release-assets/*.apk)
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" "${assets[@]}" --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" "${assets[@]}" --generate-notes
+          fi
