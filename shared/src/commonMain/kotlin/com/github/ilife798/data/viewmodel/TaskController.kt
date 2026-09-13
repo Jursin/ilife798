@@ -22,6 +22,9 @@ import kotlinx.coroutines.launch
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
+// 瞬时网络异常的最大重试次数
+private const val NETWORK_RETRY_ATTEMPTS = 3
+
 // 积分任务：合并多渠道任务列表、执行并停止、运行日志。
 class TaskController(
     private val scope: CoroutineScope,
@@ -309,7 +312,7 @@ class TaskController(
                                 delay(wait.milliseconds)
                             }
                             addTaskLog("每日签到: 执行中...")
-                            val signResult = api.signIn(signToken, uid, weekDay, merged.dailyAdId)
+                            val signResult = withNetworkRetry { api.signIn(signToken, uid, weekDay, merged.dailyAdId) }
                             if (signResult.success) {
                                 gained += merged.dailyScore
                                 RunNotifications.updateTask(gained)
@@ -317,7 +320,7 @@ class TaskController(
                             } else if (signResult.code == -98) {
                                 addTaskLog("每日签到: 请求频繁，等待60秒重试...")
                                 delay(60.seconds)
-                                val retryResult = api.signIn(signToken, uid, weekDay, merged.dailyAdId)
+                                val retryResult = withNetworkRetry { api.signIn(signToken, uid, weekDay, merged.dailyAdId) }
                                 if (retryResult.success) {
                                     gained += merged.dailyScore
                                     RunNotifications.updateTask(gained)
@@ -348,35 +351,38 @@ class TaskController(
                             addTaskLog("[${mission.name}] 已完成 $completed/$maxCount，跳过")
                             continue
                         }
-                        for (round in (completed + 1)..maxCount) {
-                            if (!isActive) break
-                            val wait = rateLimiter.reserveDelay(execToken, currentTimeMillis())
-                            if (wait > 0) {
-                                delay(wait.milliseconds)
+                        try {
+                            for (round in (completed + 1)..maxCount) {
+                                if (!isActive) break
+                                addTaskLog("[${mission.name}] ($round/$maxCount) 执行中...")
+                                delay(30.seconds)
+                                var execResult = withNetworkRetry { api.executeMission(execToken, uid, mission.adId) }
+                                if (execResult.code == -98) {
+                                    addTaskLog("[${mission.name}] 请求频繁，等待60秒重试...")
+                                    delay(60.seconds)
+                                    execResult = withNetworkRetry { api.executeMission(execToken, uid, mission.adId) }
+                                }
+                                if (execResult.success) {
+                                    executed++
+                                    gained += mission.score
+                                    RunNotifications.updateTask(gained)
+                                    addTaskLog("[${mission.name}] ($round/$maxCount) 成功 +${mission.score}分")
+                                    missions =
+                                        missions.map {
+                                            if (it.adId == mission.adId) it.copy(dailyCompleted = it.dailyCompleted + 1) else it
+                                        }
+                                } else if (execResult.code == -98) {
+                                    addTaskLog("[${mission.name}] 请求频繁，跳过剩余任务")
+                                    break
+                                } else {
+                                    addTaskLog("[${mission.name}] ($round/$maxCount) 失败: ${execResult.message}")
+                                }
                             }
-                            addTaskLog("[${mission.name}] ($round/$maxCount) 执行中...")
-                            var execResult = api.executeMission(execToken, uid, mission.adId)
-                            if (execResult.code == -98) {
-                                addTaskLog("[${mission.name}] 请求频繁，等待60秒重试...")
-                                delay(60.seconds)
-                                execResult = api.executeMission(execToken, uid, mission.adId)
-                            }
-                            if (execResult.success) {
-                                executed++
-                                gained += mission.score
-                                RunNotifications.updateTask(gained)
-                                addTaskLog("[${mission.name}] ($round/$maxCount) 成功 +${mission.score}分")
-                                missions =
-                                    missions.map {
-                                        if (it.adId == mission.adId) it.copy(dailyCompleted = it.dailyCompleted + 1) else it
-                                    }
-                            } else if (execResult.code == -98) {
-                                addTaskLog("[${mission.name}] 请求频繁，跳过剩余任务")
-                                break
-                            } else {
-                                addTaskLog("[${mission.name}] ($round/$maxCount) 失败: ${execResult.message}")
-                            }
-                            delay(30.seconds)
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (e: Exception) {
+                            // 单个任务失败不中断整轮，继续后续任务
+                            addTaskLog("[${mission.name}] 执行异常: ${e.message}")
                         }
                     }
                     if (isActive && isCurrentAccount()) {
@@ -439,6 +445,25 @@ class TaskController(
                 }
             } finally {
                 tasksRefreshing = false
+            }
+        }
+    }
+
+    // 对瞬时网络异常做有限次退避重试（DNS 解析失败、连接/读取超时等）
+    private suspend fun <T> withNetworkRetry(block: suspend () -> T): T {
+        var backoffMs = 2_000L
+        var attempt = 1
+        while (true) {
+            try {
+                return block()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                if (attempt >= NETWORK_RETRY_ATTEMPTS || !isTransientNetworkError(e)) throw e
+                addTaskLog("网络异常，${backoffMs / 1000} 秒后重试($attempt/${NETWORK_RETRY_ATTEMPTS - 1})...")
+                delay(backoffMs.milliseconds)
+                backoffMs *= 2
+                attempt++
             }
         }
     }
