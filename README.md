@@ -14,9 +14,18 @@
 
 ## 🖼️ 截图
 
-| ![](docs/1.png) | ![](docs/2.png) | ![](docs/3.png) |
-| - | - | - |
-| ![](docs/4.png) | ![](docs/5.png) | ![](docs/6.png) |
+<table>
+  <tr>
+    <td><picture><source media="(prefers-color-scheme: dark)" srcset="docs/dark/1.png"><img alt="" src="docs/light/1.png"></picture></td>
+    <td><picture><source media="(prefers-color-scheme: dark)" srcset="docs/dark/2.png"><img alt="" src="docs/light/2.png"></picture></td>
+    <td><picture><source media="(prefers-color-scheme: dark)" srcset="docs/dark/3.png"><img alt="" src="docs/light/3.png"></picture></td>
+  </tr>
+  <tr>
+    <td><picture><source media="(prefers-color-scheme: dark)" srcset="docs/dark/4.png"><img alt="" src="docs/light/4.png"></picture></td>
+    <td><picture><source media="(prefers-color-scheme: dark)" srcset="docs/dark/5.png"><img alt="" src="docs/light/5.png"></picture></td>
+    <td><picture><source media="(prefers-color-scheme: dark)" srcset="docs/dark/6.png"><img alt="" src="docs/light/6.png"></picture></td>
+  </tr>
+</table>
 
 ## ✨ 功能特性
 
