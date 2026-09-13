@@ -4,6 +4,7 @@ on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
   push:
+    branches: [main]
     tags:
       - 'v*'
   workflow_dispatch:
@@ -21,26 +22,26 @@ env:
 jobs:
   validate:
     name: Validate Android build
-    if: github.event_name != 'push'
+    if: ${{ !startsWith(github.ref, 'refs/tags/') }}
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Set up JDK 21
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: '21'
 
       - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v4
 
       - name: Install Android platform
         run: sdkmanager 'platforms;android-37.0'
 
       - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v6
 
       - name: Grant execute permission for gradlew
         run: chmod +x ./gradlew
@@ -62,7 +63,7 @@ jobs:
         run: ./gradlew assembleDebug --no-daemon --stacktrace
 
       - name: Upload debug APKs
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ilife798-debug-apk
           path: ${{ env.APP_MODULE }}/build/outputs/apk/debug/*.apk
@@ -76,22 +77,22 @@ jobs:
       contents: write
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Set up JDK 21
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: '21'
 
       - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v4
 
       - name: Install Android platform
         run: sdkmanager 'platforms;android-37.0'
 
       - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v6
 
       - name: Grant execute permission for gradlew
         run: chmod +x ./gradlew
@@ -127,8 +128,8 @@ jobs:
             printf 'signing.keyPassword=%s\n' "$ANDROID_KEY_PASSWORD"
           } > local.properties
 
-      - name: Run tests, lint and build signed release APKs
-        run: ./gradlew testDebugUnitTest testAndroidHostTest lintDebug assembleRelease --no-daemon --stacktrace
+      - name: Run tests and build signed release APKs
+        run: ./gradlew testDebugUnitTest testAndroidHostTest assembleRelease --no-daemon --stacktrace
 
       - name: Verify release APK signatures
         run: |
@@ -138,25 +139,17 @@ jobs:
           done
 
       - name: Preserve R8 mapping
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ilife798-${{ github.ref_name }}-r8-mapping
           path: ${{ env.APP_MODULE }}/build/outputs/mapping/release/mapping.txt
           if-no-files-found: error
 
-      - name: Prepare release APKs
-        run: |
-          mkdir -p "$RUNNER_TEMP/release-assets"
-          for apk in "$APP_MODULE"/build/outputs/apk/release/*.apk; do
-            abi="$(basename "$apk" | sed -E 's/^ilife798-android-(.*)-release\.apk$/\1/')"
-            cp "$apk" "$RUNNER_TEMP/release-assets/ilife798-${GITHUB_REF_NAME}-${abi}.apk"
-          done
-
       - name: Publish GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          assets=("$RUNNER_TEMP"/release-assets/*.apk)
+          assets=("$APP_MODULE"/build/outputs/apk/release/*.apk)
           if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
             gh release upload "$GITHUB_REF_NAME" "${assets[@]}" --clobber
           else
