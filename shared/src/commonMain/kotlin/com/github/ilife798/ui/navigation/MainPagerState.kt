@@ -18,7 +18,10 @@ import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 
-class MainPagerState(val pagerState: PagerState, private val coroutineScope: CoroutineScope) {
+class MainPagerState(
+    val pagerState: PagerState,
+    private val coroutineScope: CoroutineScope,
+) {
     var selectedPage by mutableIntStateOf(pagerState.currentPage)
         private set
 
@@ -35,40 +38,41 @@ class MainPagerState(val pagerState: PagerState, private val coroutineScope: Cor
         selectedPage = targetIndex
         isNavigating = true
 
-        navJob = coroutineScope.launch {
-            val myJob = coroutineContext.job
-            try {
-                pagerState.scroll(MutatePriority.UserInput) {
-                    val distance = abs(targetIndex - pagerState.currentPage).coerceAtLeast(2)
-                    val duration = 100 * distance + 100
-                    val layoutInfo = pagerState.layoutInfo
-                    val pageSize = layoutInfo.pageSize + layoutInfo.pageSpacing
-                    val currentDistanceInPages =
-                        targetIndex - pagerState.currentPage - pagerState.currentPageOffsetFraction
-                    val scrollPixels = currentDistanceInPages * pageSize
+        navJob =
+            coroutineScope.launch {
+                val myJob = coroutineContext.job
+                try {
+                    pagerState.scroll(MutatePriority.UserInput) {
+                        val distance = abs(targetIndex - pagerState.currentPage).coerceAtLeast(2)
+                        val duration = 100 * distance + 100
+                        val layoutInfo = pagerState.layoutInfo
+                        val pageSize = layoutInfo.pageSize + layoutInfo.pageSpacing
+                        val currentDistanceInPages =
+                            targetIndex - pagerState.currentPage - pagerState.currentPageOffsetFraction
+                        val scrollPixels = currentDistanceInPages * pageSize
 
-                    var previousValue = 0f
-                    animate(
-                        initialValue = 0f,
-                        targetValue = scrollPixels,
-                        animationSpec = tween(easing = EaseInOut, durationMillis = duration),
-                    ) { currentValue, _ ->
-                        previousValue += scrollBy(currentValue - previousValue)
+                        var previousValue = 0f
+                        animate(
+                            initialValue = 0f,
+                            targetValue = scrollPixels,
+                            animationSpec = tween(easing = EaseInOut, durationMillis = duration),
+                        ) { currentValue, _ ->
+                            previousValue += scrollBy(currentValue - previousValue)
+                        }
                     }
-                }
 
-                if (pagerState.currentPage != targetIndex) {
-                    pagerState.scrollToPage(targetIndex)
-                }
-            } finally {
-                if (navJob == myJob) {
-                    isNavigating = false
                     if (pagerState.currentPage != targetIndex) {
-                        selectedPage = pagerState.currentPage
+                        pagerState.scrollToPage(targetIndex)
+                    }
+                } finally {
+                    if (navJob == myJob) {
+                        isNavigating = false
+                        if (pagerState.currentPage != targetIndex) {
+                            selectedPage = pagerState.currentPage
+                        }
                     }
                 }
             }
-        }
     }
 
     fun syncPage() {
@@ -81,7 +85,7 @@ class MainPagerState(val pagerState: PagerState, private val coroutineScope: Cor
 @Composable
 fun rememberMainPagerState(
     pagerState: PagerState,
-    coroutineScope: CoroutineScope = rememberCoroutineScope()
+    coroutineScope: CoroutineScope = rememberCoroutineScope(),
 ) = remember(pagerState, coroutineScope) {
     MainPagerState(pagerState, coroutineScope)
 }

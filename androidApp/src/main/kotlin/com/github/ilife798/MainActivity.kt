@@ -6,7 +6,6 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import com.github.ilife798.data.api.ApiConfig
-import com.github.ilife798.update.ACTION_SHOW_UPDATE
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -19,7 +18,7 @@ class MainActivity : ComponentActivity() {
         ApiConfig.init(
             gateway = BuildConfig.API_GATEWAY,
             salt = BuildConfig.SIGN_SALT,
-            clientId = BuildConfig.API_CID
+            clientId = BuildConfig.API_CID,
         )
 
         RunNotifications.ensureInitialized()
@@ -43,19 +42,37 @@ class MainActivity : ComponentActivity() {
 
     private fun handleIntent(intent: Intent?) {
         when (intent?.action) {
-            ACTION_SCAN -> AppShortcut.requestScan()
-            ACTION_START_DEVICE -> {
-                intent.getStringExtra(EXTRA_DEVICE_ID)?.let { AppShortcut.requestStartDevice(it) }
+            IntentActions.ACTION_SCAN -> {
+                AppRequests.scan.request()
             }
-            ACTION_RUN_TASKS -> AppShortcut.requestRunTasks()
-            ACTION_SHOW_UPDATE -> AppUpdateIntent.requestShow()
-            RunNotificationIntents.ACTION_OPEN_HOME -> RunNotificationIntent.requestOpenHome()
-            RunNotificationIntents.ACTION_STOP_DEVICE -> {
-                intent.getStringExtra(RunNotificationIntents.EXTRA_DEVICE_ID)
-                    ?.let { RunNotificationIntent.requestStopDevice(it) }
+
+            IntentActions.ACTION_START_DEVICE -> {
+                intent.getStringExtra(IntentActions.EXTRA_DEVICE_ID)?.let { AppRequests.startDevice.request(it) }
             }
-            RunNotificationIntents.ACTION_OPEN_TASKS -> RunNotificationIntent.requestOpenTasks()
-            RunNotificationIntents.ACTION_STOP_TASKS -> RunNotificationIntent.requestStopTasks()
+
+            IntentActions.ACTION_RUN_TASKS -> {
+                AppRequests.runTasks.request()
+            }
+
+            IntentActions.ACTION_SHOW_UPDATE -> {
+                AppRequests.showUpdate.request()
+            }
+
+            IntentActions.ACTION_OPEN_HOME -> {
+                AppRequests.openHome.request()
+            }
+
+            IntentActions.ACTION_STOP_DEVICE -> {
+                intent.getStringExtra(IntentActions.EXTRA_DEVICE_ID)?.let { AppRequests.stopDevice.request(it) }
+            }
+
+            IntentActions.ACTION_OPEN_TASKS -> {
+                AppRequests.openTasks.request()
+            }
+
+            IntentActions.ACTION_STOP_TASKS -> {
+                AppRequests.stopTasks.request()
+            }
         }
     }
 

@@ -31,6 +31,21 @@ import androidx.compose.ui.unit.dp
 import androidx.navigationevent.NavigationEventInfo
 import androidx.navigationevent.compose.NavigationBackHandler
 import androidx.navigationevent.compose.rememberNavigationEventState
+import com.github.ilife798.data.viewmodel.AppViewModel
+import com.github.ilife798.ui.page.account.AccountPage
+import com.github.ilife798.ui.page.bill.BillPage
+import com.github.ilife798.ui.page.device.DeviceAddPage
+import com.github.ilife798.ui.page.device.QrScannerPage
+import com.github.ilife798.ui.page.home.HomePage
+import com.github.ilife798.ui.page.license.LicensePage
+import com.github.ilife798.ui.page.login.LoginPage
+import com.github.ilife798.ui.page.me.MePage
+import com.github.ilife798.ui.page.score.ScorePage
+import com.github.ilife798.ui.page.tasks.TasksPage
+import com.github.ilife798.ui.theme.appBarBlur
+import com.github.ilife798.ui.theme.blurAppBarColor
+import com.github.ilife798.ui.theme.captureForBlur
+import com.github.ilife798.ui.theme.rememberAppBlurBackdrop
 import top.yukonga.miuix.kmp.basic.FloatingNavigationBar
 import top.yukonga.miuix.kmp.basic.FloatingNavigationBarItem
 import top.yukonga.miuix.kmp.basic.NavigationBar
@@ -51,6 +66,7 @@ import top.yukonga.miuix.kmp.icon.extended.ListView
 import top.yukonga.miuix.kmp.nav.core.NavCornerClipMode
 import top.yukonga.miuix.kmp.nav.core.NavDisplay
 import top.yukonga.miuix.kmp.nav.core.NavDisplayEffects
+import top.yukonga.miuix.kmp.nav.core.NavKey
 import top.yukonga.miuix.kmp.nav.core.rememberNavBackStack
 import top.yukonga.miuix.kmp.nav.core.rememberNavSystemCornerRadius
 import top.yukonga.miuix.kmp.nav.transition.NavMotion
@@ -59,52 +75,37 @@ import top.yukonga.miuix.kmp.nav.transition.NavTransition
 import top.yukonga.miuix.kmp.nav.transition.NavTransitions
 import top.yukonga.miuix.kmp.nav.transition.navGraphicsTransition
 import top.yukonga.miuix.kmp.theme.MiuixTheme
-import com.github.ilife798.ui.theme.appBarBlur
-import com.github.ilife798.ui.theme.blurAppBarColor
-import com.github.ilife798.ui.theme.captureForBlur
-import com.github.ilife798.ui.theme.rememberAppBlurBackdrop
-import com.github.ilife798.data.viewmodel.AppViewModel
-import com.github.ilife798.AppShortcut
-import com.github.ilife798.AppUpdateIntent
-import com.github.ilife798.RunNotificationIntent
-import com.github.ilife798.ui.page.home.HomePage
-import com.github.ilife798.ui.page.tasks.TasksPage
-import com.github.ilife798.ui.page.me.MePage
-import com.github.ilife798.ui.page.login.LoginPage
-import com.github.ilife798.ui.page.score.ScorePage
-import com.github.ilife798.ui.page.account.AccountPage
-import com.github.ilife798.ui.page.bill.MyBillPage
-import com.github.ilife798.ui.page.device.DeviceAddPage
-import com.github.ilife798.ui.page.device.QrScannerPage
-import com.github.ilife798.ui.page.about.OpenSourceLicensePage
 
-private val tabs = listOf(
-    NavigationItem("首页", MiuixIcons.Home),
-    NavigationItem("任务", MiuixIcons.ListView),
-    NavigationItem("我的", MiuixIcons.Contacts)
-)
+private val tabs =
+    listOf(
+        NavigationItem("首页", MiuixIcons.Home),
+        NavigationItem("任务", MiuixIcons.ListView),
+        NavigationItem("我的", MiuixIcons.Contacts),
+    )
 
 // 宽屏阈值：达到该宽度时改用 NavigationRail 侧边导航
 private val WIDE_SCREEN_MIN_WIDTH = 600.dp
 
 // 宽屏二级页面动效：从中心放大进入、缩小退出
-private val WideScaleTransition: NavTransition = navGraphicsTransition(
-    opaqueDepth = 2f,
-    motion = NavMotion(
-        commit = NavSettleSpec.Tween(200, FastOutSlowInEasing),
-        cancel = NavSettleSpec.Tween(200, FastOutSlowInEasing),
-        programmatic = NavSettleSpec.Tween(200, FastOutSlowInEasing),
-    ),
-) { scope ->
-    val depth = scope.relativeDepth
-    if (depth <= 0f) {
-        val progress = (-depth).coerceIn(0f, 1f)
-        val scale = 1f - 0.12f * progress
-        scaleX = scale
-        scaleY = scale
-        alpha = 1f - 0.2f * progress
+private val WideScaleTransition: NavTransition =
+    navGraphicsTransition(
+        opaqueDepth = 2f,
+        motion =
+            NavMotion(
+                commit = NavSettleSpec.Tween(200, FastOutSlowInEasing),
+                cancel = NavSettleSpec.Tween(200, FastOutSlowInEasing),
+                programmatic = NavSettleSpec.Tween(200, FastOutSlowInEasing),
+            ),
+    ) { scope ->
+        val depth = scope.relativeDepth
+        if (depth <= 0f) {
+            val progress = (-depth).coerceIn(0f, 1f)
+            val scale = 1f - 0.12f * progress
+            scaleX = scale
+            scaleY = scale
+            alpha = 1f - 0.2f * progress
+        }
     }
-}
 
 @Composable
 private fun NavBarContent(
@@ -117,27 +118,30 @@ private fun NavBarContent(
     if (floatingNav) {
         FloatingNavigationBar(
             color = if (blurActive) Color.Transparent else MiuixTheme.colorScheme.surfaceContainer,
-            modifier = if (blurActive) {
-                Modifier.textureBlur(
-                    backdrop = navBarBackdrop,
-                    shape = RoundedCornerShape(50.dp),
-                    blurRadius = 25f,
-                    colors = BlurColors(
-                        blendColors = listOf(
-                            BlendColorEntry(MiuixTheme.colorScheme.surfaceContainer.copy(alpha = 0.8f))
-                        )
-                    ),
-                )
-            } else {
-                Modifier
-            },
+            modifier =
+                if (blurActive) {
+                    Modifier.textureBlur(
+                        backdrop = navBarBackdrop,
+                        shape = RoundedCornerShape(50.dp),
+                        blurRadius = 25f,
+                        colors =
+                            BlurColors(
+                                blendColors =
+                                    listOf(
+                                        BlendColorEntry(MiuixTheme.colorScheme.surfaceContainer.copy(alpha = 0.8f)),
+                                    ),
+                            ),
+                    )
+                } else {
+                    Modifier
+                },
         ) {
             tabs.forEachIndexed { index, tab ->
                 FloatingNavigationBarItem(
                     selected = pagerState.currentPage == index,
                     onClick = { onSelect(index) },
                     icon = tab.icon,
-                    label = tab.label
+                    label = tab.label,
                 )
             }
         }
@@ -151,7 +155,7 @@ private fun NavBarContent(
                     selected = pagerState.currentPage == index,
                     onClick = { onSelect(index) },
                     icon = tab.icon,
-                    label = tab.label
+                    label = tab.label,
                 )
             }
         }
@@ -167,9 +171,10 @@ private fun HomePagerContent(
     blurBackdrop: LayerBackdrop?,
     wideScreen: Boolean,
 ) {
-    val pagerModifier = Modifier
-        .fillMaxSize()
-        .captureForBlur(blurBackdrop)
+    val pagerModifier =
+        Modifier
+            .fillMaxSize()
+            .captureForBlur(blurBackdrop)
     val pageContent: @Composable (Int) -> Unit = { page ->
         HomePagerPage(
             viewModel = viewModel,
@@ -205,26 +210,34 @@ private fun HomePagerPage(
     wideScreen: Boolean,
 ) {
     when (page) {
-        0 -> HomePage(
-            viewModel = viewModel,
-            onDeviceAddClick = { navigate(Page.DeviceAdd) },
-            bottomPadding = bottomPadding
-        )
-        1 -> TasksPage(
-            viewModel = viewModel,
-            onLoginClick = { isAlipay -> navigate(Page.Login(isAlipay = isAlipay)) },
-            bottomPadding = bottomPadding
-        )
-        2 -> MePage(
-            viewModel = viewModel,
-            onLoginClick = { isAlipay -> navigate(Page.Login(isAlipay = isAlipay)) },
-            onScoreClick = { navigate(Page.Score) },
-            onAccountClick = { navigate(Page.Account) },
-            onBillClick = { navigate(Page.Bill) },
-            onLicenseClick = { navigate(Page.Licenses) },
-            bottomPadding = bottomPadding,
-            wideScreen = wideScreen
-        )
+        0 -> {
+            HomePage(
+                viewModel = viewModel,
+                onDeviceAddClick = { navigate(Page.DeviceAdd) },
+                bottomPadding = bottomPadding,
+            )
+        }
+
+        1 -> {
+            TasksPage(
+                viewModel = viewModel,
+                onLoginClick = { isAlipay -> navigate(Page.Login(isAlipay = isAlipay)) },
+                bottomPadding = bottomPadding,
+            )
+        }
+
+        2 -> {
+            MePage(
+                viewModel = viewModel,
+                onLoginClick = { isAlipay -> navigate(Page.Login(isAlipay = isAlipay)) },
+                onScoreClick = { navigate(Page.Score) },
+                onAccountClick = { navigate(Page.Account) },
+                onBillClick = { navigate(Page.Bill) },
+                onLicenseClick = { navigate(Page.License) },
+                bottomPadding = bottomPadding,
+                wideScreen = wideScreen,
+            )
+        }
     }
 }
 
@@ -232,7 +245,7 @@ private fun HomePagerPage(
 private fun NavEntry(
     interceptPredictiveBack: Boolean,
     onBack: () -> Unit,
-    content: @Composable () -> Unit
+    content: @Composable () -> Unit,
 ) {
     val state = rememberNavigationEventState(NavigationEventInfo.None)
     NavigationBackHandler(
@@ -245,31 +258,27 @@ private fun NavEntry(
 
 @Composable
 fun MainScaffold(viewModel: AppViewModel) {
-    val backStack = rememberNavBackStack<Page>(Page.Home)
+    val navBackStack = rememberNavBackStack<Page>(Page.Home)
+
+    // 增删查用 MutableList 视图，避免 IDE 在 commonMain 解析 SnapshotStateList（Android 实现 Parcelable）
+    val backStack: MutableList<NavKey> = navBackStack
     val floatingNav = viewModel.state.floatingNav
     val predictiveBackEnabled = viewModel.state.predictiveBackEnabled
 
-    val onBack: () -> Unit = remember(backStack) {
-        { backStack.removeLastOrNull() }
-    }
+    val onBack: () -> Unit =
+        remember(backStack) {
+            { backStack.removeLastOrNull() }
+        }
 
     // 防止连点重复压入相同路由（Navigation 3 不允许重复 key）
-    val navigate: (Page) -> Unit = remember(backStack) {
-        { page -> if (backStack.lastOrNull() != page) backStack.add(page) }
-    }
+    val navigate: (Page) -> Unit =
+        remember(backStack) {
+            { page -> if (backStack.lastOrNull() != page) backStack.add(page) }
+        }
 
     val interceptPredictiveBack = !predictiveBackEnabled && backStack.size > 1
 
-    // 桌面快捷方式“扫一扫”：冷启动与 onNewIntent 均通过该信号跳转扫码页
-    val scanRequestId = AppShortcut.scanRequestId
     var scanFromShortcut by remember { mutableStateOf(false) }
-    LaunchedEffect(scanRequestId) {
-        if (scanRequestId > 0) {
-            scanFromShortcut = true
-            navigate(Page.DeviceScan)
-            AppShortcut.consumeScan()
-        }
-    }
 
     val pagerState = rememberPagerState(pageCount = { 3 })
     val coroutineScope = rememberCoroutineScope()
@@ -277,73 +286,14 @@ fun MainScaffold(viewModel: AppViewModel) {
     val navBarBackdrop = rememberAppBlurBackdrop(viewModel.state.appBlur)
     val navRailState = rememberNavigationRailState()
 
-    // 快捷设置图块：回到首页并触发对应设备的“启动按钮”流程，停在弹出对话框
-    val startDeviceId = AppShortcut.startDeviceId
-    LaunchedEffect(startDeviceId) {
-        val id = startDeviceId ?: return@LaunchedEffect
-        while (backStack.size > 1) backStack.removeLastOrNull()
-        mainPagerState.animateToPage(0)
-        viewModel.requestExternalDeviceStart(id)
-        AppShortcut.consumeStartDevice()
-    }
-
-    // 桌面快捷方式“运行积分任务”：跳转到任务页并开始运行
-    val runTasksRequestId = AppShortcut.runTasksRequestId
-    LaunchedEffect(runTasksRequestId) {
-        if (runTasksRequestId <= 0) return@LaunchedEffect
-        while (backStack.size > 1) backStack.removeLastOrNull()
-        mainPagerState.animateToPage(1)
-        viewModel.runTasksFromShortcut()
-        AppShortcut.consumeRunTasks()
-    }
-
-    // 点击“正在下载”通知：回到“我的”页并重新弹出下载对话框
-    val updateRequestId = AppUpdateIntent.showRequestId
-    LaunchedEffect(updateRequestId) {
-        if (updateRequestId <= 0) return@LaunchedEffect
-        while (backStack.size > 1) backStack.removeLastOrNull()
-        mainPagerState.animateToPage(2)
-        viewModel.reopenUpdateProgressDialog()
-        AppUpdateIntent.consume()
-    }
-
-    // 点击设备运行通知正文：仅回到首页
-    val openHomeRequestId = RunNotificationIntent.openHomeRequestId
-    LaunchedEffect(openHomeRequestId) {
-        if (openHomeRequestId <= 0) return@LaunchedEffect
-        while (backStack.size > 1) backStack.removeLastOrNull()
-        mainPagerState.animateToPage(0)
-        RunNotificationIntent.consumeOpenHome()
-    }
-
-    // 点击设备运行通知“停止”按钮：回到首页并停止对应设备
-    val stopDeviceId = RunNotificationIntent.stopDeviceId
-    LaunchedEffect(stopDeviceId) {
-        val id = stopDeviceId ?: return@LaunchedEffect
-        while (backStack.size > 1) backStack.removeLastOrNull()
-        mainPagerState.animateToPage(0)
-        viewModel.stopDevice(id)
-        RunNotificationIntent.consumeStopDevice()
-    }
-
-    // 点击积分任务通知正文：跳转到任务页
-    val openTasksRequestId = RunNotificationIntent.openTasksRequestId
-    LaunchedEffect(openTasksRequestId) {
-        if (openTasksRequestId <= 0) return@LaunchedEffect
-        while (backStack.size > 1) backStack.removeLastOrNull()
-        mainPagerState.animateToPage(1)
-        RunNotificationIntent.consumeOpenTasks()
-    }
-
-    // 点击积分任务通知“停止”按钮：跳转到任务页并停止任务
-    val stopTasksRequestId = RunNotificationIntent.stopTasksRequestId
-    LaunchedEffect(stopTasksRequestId) {
-        if (stopTasksRequestId <= 0) return@LaunchedEffect
-        while (backStack.size > 1) backStack.removeLastOrNull()
-        mainPagerState.animateToPage(1)
-        viewModel.stopTasks()
-        RunNotificationIntent.consumeStopTasks()
-    }
+    // 平台 Intent/快捷方式/通知触发的导航与操作
+    AppIntentEffects(
+        viewModel = viewModel,
+        mainPagerState = mainPagerState,
+        navigate = navigate,
+        onScanFromShortcut = { scanFromShortcut = true },
+        clearToRoot = { while (backStack.size > 1) backStack.removeLastOrNull() },
+    )
 
     LaunchedEffect(pagerState.currentPage) {
         mainPagerState.syncPage()
@@ -353,12 +303,18 @@ fun MainScaffold(viewModel: AppViewModel) {
                 viewModel.loadScoreInfo()
                 viewModel.loadSpendingStats()
             }
-            1 -> viewModel.loadMissions()
-            2 -> viewModel.loadAccountInfo()
+
+            1 -> {
+                viewModel.loadMissions()
+            }
+
+            2 -> {
+                viewModel.loadAccountInfo()
+            }
         }
     }
 
-    // Tab-level back handler: go back to first tab when on non-first tab
+    // 回到上一层：在非首个 Tab 时先回到首个 Tab
     val isPagerBackHandlerEnabled by remember {
         androidx.compose.runtime.derivedStateOf {
             backStack.size == 1 && mainPagerState.selectedPage != 0
@@ -372,25 +328,27 @@ fun MainScaffold(viewModel: AppViewModel) {
     )
 
     BoxWithConstraints(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(MiuixTheme.colorScheme.background)
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .background(MiuixTheme.colorScheme.background),
     ) {
         val wideScreen = maxWidth >= WIDE_SCREEN_MIN_WIDTH
         val wideCornerRadius = rememberNavSystemCornerRadius()
         val detailTransition = if (wideScreen) WideScaleTransition else null
         NavDisplay(
-            backStack = backStack,
+            backStack = navBackStack,
             onBack = onBack,
             transition = NavTransitions.MiuixDefault,
-            effects = NavDisplayEffects(
-                enableCornerClip = true,
-                cornerClipRadius = if (wideScreen) wideCornerRadius else 32.dp,
-                cornerClipMode = if (wideScreen) NavCornerClipMode.All else NavCornerClipMode.Leading,
-                dimAmount = 0.5f,
-                backdropColor = if (wideScreen) MiuixTheme.colorScheme.background else MiuixTheme.colorScheme.surface,
-                blockInputDuringTransition = false,
-            ),
+            effects =
+                NavDisplayEffects(
+                    enableCornerClip = true,
+                    cornerClipRadius = if (wideScreen) wideCornerRadius else 32.dp,
+                    cornerClipMode = if (wideScreen) NavCornerClipMode.All else NavCornerClipMode.Leading,
+                    dimAmount = 0.5f,
+                    backdropColor = if (wideScreen) MiuixTheme.colorScheme.background else MiuixTheme.colorScheme.surface,
+                    blockInputDuringTransition = false,
+                ),
         ) {
             entry<Page.Home> {
                 NavEntry(interceptPredictiveBack, onBack) {
@@ -402,13 +360,14 @@ fun MainScaffold(viewModel: AppViewModel) {
                                         selected = pagerState.currentPage == index,
                                         onClick = { mainPagerState.animateToPage(index) },
                                         icon = tab.icon,
-                                        label = tab.label
+                                        label = tab.label,
                                     )
                                 }
                             }
                             VerticalDivider(
-                                modifier = Modifier
-                                    .windowInsetsPadding(WindowInsets.statusBars.only(WindowInsetsSides.Top))
+                                modifier =
+                                    Modifier
+                                        .windowInsetsPadding(WindowInsets.statusBars.only(WindowInsetsSides.Top)),
                             )
                             HomePagerContent(
                                 viewModel = viewModel,
@@ -446,7 +405,7 @@ fun MainScaffold(viewModel: AppViewModel) {
                     LoginPage(
                         viewModel = viewModel,
                         isAlipay = key.isAlipay,
-                        onBack = onBack
+                        onBack = onBack,
                     )
                 }
             }
@@ -454,7 +413,7 @@ fun MainScaffold(viewModel: AppViewModel) {
                 NavEntry(interceptPredictiveBack, onBack) {
                     ScorePage(
                         viewModel = viewModel,
-                        onBack = onBack
+                        onBack = onBack,
                     )
                 }
             }
@@ -462,15 +421,15 @@ fun MainScaffold(viewModel: AppViewModel) {
                 NavEntry(interceptPredictiveBack, onBack) {
                     AccountPage(
                         viewModel = viewModel,
-                        onBack = onBack
+                        onBack = onBack,
                     )
                 }
             }
             entry<Page.Bill>(transition = detailTransition) {
                 NavEntry(interceptPredictiveBack, onBack) {
-                    MyBillPage(
+                    BillPage(
                         viewModel = viewModel,
-                        onBack = onBack
+                        onBack = onBack,
                     )
                 }
             }
@@ -482,7 +441,7 @@ fun MainScaffold(viewModel: AppViewModel) {
                         onScanClick = {
                             scanFromShortcut = false
                             navigate(Page.DeviceScan)
-                        }
+                        },
                     )
                 }
             }
@@ -495,15 +454,15 @@ fun MainScaffold(viewModel: AppViewModel) {
                             onBack()
                             // 由快捷方式进入时，扫码后跳转添加设备页以便回填设备编号
                             if (scanFromShortcut) navigate(Page.DeviceAdd)
-                        }
+                        },
                     )
                 }
             }
-            entry<Page.Licenses>(transition = detailTransition) {
+            entry<Page.License>(transition = detailTransition) {
                 NavEntry(interceptPredictiveBack, onBack) {
-                    OpenSourceLicensePage(
+                    LicensePage(
                         viewModel = viewModel,
-                        onBack = onBack
+                        onBack = onBack,
                     )
                 }
             }

@@ -7,6 +7,7 @@ plugins {
     alias(libs.plugins.composeCompiler)
     alias(libs.plugins.kotlinSerialization)
     alias(libs.plugins.aboutLibraries)
+    alias(libs.plugins.spotless)
 }
 
 aboutLibraries {
@@ -14,6 +15,17 @@ aboutLibraries {
         outputFile = file("src/commonMain/composeResources/files/aboutlibraries.json")
         prettyPrint = true
     }
+}
+
+repositories {
+    google {
+        mavenContent {
+            includeGroupByRegex("androidx(\\..*)?")
+            includeGroupByRegex("com\\.android(\\..*)?")
+            includeGroupByRegex("com\\.google(\\..*)?")
+        }
+    }
+    mavenCentral()
 }
 
 compose.resources {
@@ -26,37 +38,27 @@ kotlin {
         freeCompilerArgs.add("-Xexpect-actual-classes")
     }
 
-    listOf(
-        iosArm64(),
-        iosSimulatorArm64()
-    ).forEach { iosTarget ->
-        iosTarget.binaries.framework {
-            baseName = "Shared"
-            isStatic = true
+    android {
+        namespace = "com.github.ilife798.shared"
+        compileSdk = 37
+        minSdk = 26
+
+        compilerOptions {
+            jvmTarget = JvmTarget.JVM_21
+        }
+        androidResources {
+            enable = true
+        }
+        withHostTest {
+            isIncludeAndroidResources = true
+        }
+        withDeviceTestBuilder {
+            sourceSetTreeName = "test"
+        }.configure {
+            instrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         }
     }
-    
-    android {
-       namespace = "com.github.ilife798.shared"
-       compileSdk = 37
-       minSdk = 26
-    
-       compilerOptions {
-           jvmTarget = JvmTarget.JVM_21
-       }
-       androidResources {
-           enable = true
-       }
-       withHostTest {
-           isIncludeAndroidResources = true
-       }
-       withDeviceTestBuilder {
-           sourceSetTreeName = "test"
-       }.configure {
-           instrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-       }
-    }
-    
+
     sourceSets {
         androidMain.dependencies {
             implementation(libs.ktor.okhttp)
@@ -67,9 +69,6 @@ kotlin {
             implementation(libs.androidx.camera.lifecycle)
             implementation(libs.androidx.camera.view)
             implementation(libs.zxing.core)
-        }
-        iosMain.dependencies {
-            implementation(libs.ktor.darwin)
         }
         commonMain.dependencies {
             @Suppress("DEPRECATION")
@@ -99,12 +98,14 @@ kotlin {
 }
 
 // 依赖变化时自动重新生成开源许可清单，供 Compose Resources 读取
-tasks.matching {
-    it.name in setOf(
-        "prepareComposeResourcesTaskForCommonMain",
-        "copyNonXmlValueResourcesForCommonMain",
-        "convertXmlValueResourcesForCommonMain"
-    )
-}.configureEach {
-    dependsOn("exportLibraryDefinitions")
-}
+tasks
+    .matching {
+        it.name in
+            setOf(
+                "prepareComposeResourcesTaskForCommonMain",
+                "copyNonXmlValueResourcesForCommonMain",
+                "convertXmlValueResourcesForCommonMain",
+            )
+    }.configureEach {
+        dependsOn("exportLibraryDefinitions")
+    }

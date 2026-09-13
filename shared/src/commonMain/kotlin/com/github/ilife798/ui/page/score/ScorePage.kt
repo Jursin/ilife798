@@ -11,13 +11,11 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
@@ -28,64 +26,57 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.github.ilife798.data.model.ScoreFilter
+import com.github.ilife798.data.model.ScoreRecord
+import com.github.ilife798.data.model.WalletAccount
+import com.github.ilife798.data.viewmodel.AppViewModel
+import com.github.ilife798.showToast
+import com.github.ilife798.ui.component.AppPullToRefresh
+import com.github.ilife798.ui.component.BlurredTopAppBar
+import com.github.ilife798.ui.component.ConfirmDialog
+import com.github.ilife798.ui.component.EmptyStateText
+import com.github.ilife798.ui.component.LOAD_MORE_THRESHOLD_PX
+import com.github.ilife798.ui.component.ListLoadMoreFooter
+import com.github.ilife798.ui.component.PageScrollColumn
+import com.github.ilife798.ui.component.SectionHeader
+import com.github.ilife798.ui.theme.primaryButtonColors
+import com.github.ilife798.ui.theme.rememberAppBlurBackdrop
+import com.github.ilife798.util.formatDateTime
+import com.github.ilife798.util.formatMoney
 import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.DropdownEntry
 import top.yukonga.miuix.kmp.basic.DropdownItem
-import top.yukonga.miuix.kmp.basic.HorizontalDivider
 import top.yukonga.miuix.kmp.basic.Icon
-import top.yukonga.miuix.kmp.basic.IconButton
-import top.yukonga.miuix.kmp.basic.InfiniteProgressIndicator
 import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
-import top.yukonga.miuix.kmp.basic.PullToRefresh
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.basic.TextField
-import top.yukonga.miuix.kmp.basic.TopAppBar
 import top.yukonga.miuix.kmp.icon.MiuixIcons
-import top.yukonga.miuix.kmp.icon.extended.Back
 import top.yukonga.miuix.kmp.icon.extended.BankCards
 import top.yukonga.miuix.kmp.icon.extended.More
 import top.yukonga.miuix.kmp.menu.OverlayDropdownMenu
 import top.yukonga.miuix.kmp.menu.OverlayIconDropdownMenu
-import top.yukonga.miuix.kmp.theme.LocalDismissState
 import top.yukonga.miuix.kmp.theme.MiuixTheme
-import top.yukonga.miuix.kmp.utils.overScrollVertical
-import top.yukonga.miuix.kmp.utils.scrollEndHaptic
-import top.yukonga.miuix.kmp.window.WindowDialog
-import com.github.ilife798.data.model.ScoreFilter
-import com.github.ilife798.data.model.ScoreRecord
-import com.github.ilife798.data.model.WalletAccount
-import com.github.ilife798.data.viewmodel.AppViewModel
-import com.github.ilife798.showToast
-import com.github.ilife798.ui.theme.WindowBlurEffect
-import com.github.ilife798.ui.theme.appBarBlur
-import com.github.ilife798.ui.theme.blurAppBarColor
-import com.github.ilife798.ui.theme.captureForBlur
-import com.github.ilife798.ui.theme.primaryButtonColors
-import com.github.ilife798.ui.theme.rememberAppBlurBackdrop
-import com.github.ilife798.util.formatTimestamp
-import kotlin.math.round
 
-private const val LOAD_MORE_THRESHOLD_PX = 200
-
-// 积分兑换档位（积分）
 private val SCORE_EXCHANGE_AMOUNTS = listOf(100, 1000)
 
 private enum class ScorePanel { Records, Exchange }
 
 @Composable
-fun ScorePage(viewModel: AppViewModel, onBack: () -> Unit) {
+fun ScorePage(
+    viewModel: AppViewModel,
+    onBack: () -> Unit,
+) {
     val state = viewModel.state
     val scores = viewModel.scoreRecords
-    val isLoggedIn = state.account.appToken.isNotEmpty() || state.account.token.isNotEmpty()
+    val isLoggedIn = state.account.hasAnyToken
     val scrollBehavior = MiuixScrollBehavior()
     val blurBackdrop = rememberAppBlurBackdrop(state.appBlur)
     val scrollState = rememberScrollState()
@@ -93,20 +84,22 @@ fun ScorePage(viewModel: AppViewModel, onBack: () -> Unit) {
     var panel by remember { mutableStateOf(ScorePanel.Records) }
     var exchangeUnitScore by remember { mutableStateOf<Int?>(null) }
 
-    val scoreFilterEntry = remember(viewModel.scoreFilter) {
-        DropdownEntry(
-            items = ScoreFilter.entries.map { filter ->
-                DropdownItem(
-                    text = scoreFilterLabel(filter),
-                    selected = viewModel.scoreFilter == filter,
-                    onClick = { viewModel.selectScoreFilter(filter) }
-                )
-            }
-        )
-    }
+    val scoreFilterEntry =
+        remember(viewModel.scoreFilter) {
+            DropdownEntry(
+                items =
+                    ScoreFilter.entries.map { filter ->
+                        DropdownItem(
+                            text = scoreFilterLabel(filter),
+                            selected = viewModel.scoreFilter == filter,
+                            onClick = { viewModel.selectScoreFilter(filter) },
+                        )
+                    },
+            )
+        }
 
     LaunchedEffect(Unit) {
-        if (state.account.appToken.isNotEmpty() || state.account.token.isNotEmpty()) {
+        if (state.account.hasAnyToken) {
             viewModel.refreshScorePage()
         }
     }
@@ -130,91 +123,71 @@ fun ScorePage(viewModel: AppViewModel, onBack: () -> Unit) {
 
     Scaffold(
         topBar = {
-            TopAppBar(
+            BlurredTopAppBar(
                 title = "积分明细",
-                modifier = Modifier.appBarBlur(blurBackdrop),
-                color = blurAppBarColor(blurBackdrop),
+                blurBackdrop = blurBackdrop,
                 scrollBehavior = scrollBehavior,
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(
-                            imageVector = MiuixIcons.Back,
-                            contentDescription = "返回"
-                        )
-                    }
-                },
+                onBack = onBack,
                 actions = {
                     OverlayIconDropdownMenu(entry = scoreFilterEntry) {
                         Icon(
                             imageVector = MiuixIcons.More,
-                            contentDescription = "选择积分类型"
+                            contentDescription = "选择积分类型",
                         )
                     }
-                }
+                },
             )
-        }
+        },
     ) { paddingValues ->
-        PullToRefresh(
-            isRefreshing = viewModel.scoreRefreshing,
-            onRefresh = { viewModel.refreshScores() },
-            modifier = Modifier.fillMaxSize(),
-            topAppBarScrollBehavior = scrollBehavior,
-            contentPadding = paddingValues,
-            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-            refreshTexts = listOf("下拉刷新", "松开刷新", "正在刷新…", "刷新完成")
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .captureForBlur(blurBackdrop)
-                    .nestedScroll(scrollBehavior.nestedScrollConnection)
-                    .scrollEndHaptic()
-                    .overScrollVertical()
-                    .verticalScroll(scrollState)
-                    .padding(paddingValues)
-                    .padding(horizontal = 16.dp)
-                    .padding(top = 8.dp, bottom = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+        AppPullToRefresh(viewModel.scoreRefreshing, { viewModel.refreshScores() }, scrollBehavior, paddingValues) {
+            PageScrollColumn(
+                blurBackdrop = blurBackdrop,
+                scrollBehavior = scrollBehavior,
+                contentPadding = paddingValues,
+                scrollState = scrollState,
             ) {
                 Card(modifier = Modifier.fillMaxWidth()) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Text(
                             text = "积分概览",
                             style = MiuixTheme.textStyles.title2,
-                            color = MiuixTheme.colorScheme.onSurface
+                            color = MiuixTheme.colorScheme.onSurface,
                         )
                         Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(top = 12.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween
+                            modifier =
+                                Modifier
+                                    .fillMaxWidth()
+                                    .padding(top = 12.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
                         ) {
                             ScoreSummaryItem(
                                 label = "可用积分",
                                 value = state.points.available,
-                                alignEnd = false
+                                alignEnd = false,
                             )
                             ScoreSummaryItem(
                                 label = "累计积分",
                                 value = state.points.total,
-                                alignEnd = true
+                                alignEnd = true,
                             )
                         }
                         Spacer(modifier = Modifier.height(16.dp))
                         Button(
                             modifier = Modifier.fillMaxWidth(),
                             onClick = {
-                                panel = if (panel == ScorePanel.Exchange) {
-                                    ScorePanel.Records
-                                } else {
-                                    ScorePanel.Exchange
-                                }
+                                panel =
+                                    if (panel == ScorePanel.Exchange) {
+                                        ScorePanel.Records
+                                    } else {
+                                        ScorePanel.Exchange
+                                    }
                             },
-                            colors = if (panel == ScorePanel.Exchange) {
-                                ButtonDefaults.buttonColorsPrimary()
-                            } else {
-                                ButtonDefaults.buttonColors()
-                            }
+                            colors =
+                                if (panel == ScorePanel.Exchange) {
+                                    ButtonDefaults.buttonColorsPrimary()
+                                } else {
+                                    ButtonDefaults.buttonColors()
+                                },
                         ) {
                             Text(text = "积分兑换")
                         }
@@ -227,26 +200,30 @@ fun ScorePage(viewModel: AppViewModel, onBack: () -> Unit) {
                         (fadeIn(tween(220)) + slideInVertically(tween(220)) { it / 10 }) togetherWith
                             (fadeOut(tween(150)) + slideOutVertically(tween(150)) { -it / 10 })
                     },
-                    label = "scorePanel"
+                    label = "scorePanel",
                 ) { target ->
                     when (target) {
-                        ScorePanel.Records -> ScoreRecordsCard(
-                            records = scores,
-                            loadingMore = viewModel.scoreLoadingMore,
-                            hasMore = viewModel.scoreHasMore,
-                            isLoggedIn = isLoggedIn
-                        )
+                        ScorePanel.Records -> {
+                            ScoreRecordsCard(
+                                records = scores,
+                                loadingMore = viewModel.scoreLoadingMore,
+                                hasMore = viewModel.scoreHasMore,
+                                isLoggedIn = isLoggedIn,
+                            )
+                        }
 
-                        ScorePanel.Exchange -> ScoreExchangeCard(
-                            wallets = state.wallets,
-                            activeWalletId = state.activeWalletId,
-                            available = state.points.available ?: 0,
-                            submitting = viewModel.exchangeSubmitting,
-                            dynamicColor = state.dynamicColor,
-                            isLoggedIn = isLoggedIn,
-                            onSelectWallet = { viewModel.selectWallet(it) },
-                            onRequestExchange = { exchangeUnitScore = it }
-                        )
+                        ScorePanel.Exchange -> {
+                            ScoreExchangeCard(
+                                wallets = state.wallets,
+                                activeWalletId = state.activeWalletId,
+                                available = state.points.available ?: 0,
+                                submitting = viewModel.exchangeSubmitting,
+                                dynamicColor = state.dynamicColor,
+                                isLoggedIn = isLoggedIn,
+                                onSelectWallet = { viewModel.selectWallet(it) },
+                                onRequestExchange = { exchangeUnitScore = it },
+                            )
+                        }
                     }
                 }
             }
@@ -254,8 +231,9 @@ fun ScorePage(viewModel: AppViewModel, onBack: () -> Unit) {
     }
 
     exchangeUnitScore?.let { unitScore ->
-        val wallet = state.wallets.firstOrNull { it.id == state.activeWalletId }
-            ?: state.wallets.firstOrNull()
+        val wallet =
+            state.wallets.firstOrNull { it.id == state.activeWalletId }
+                ?: state.wallets.firstOrNull()
         ScoreExchangeDialog(
             unitScore = unitScore,
             walletName = wallet?.name?.ifEmpty { "钱包" } ?: "钱包",
@@ -270,7 +248,7 @@ fun ScorePage(viewModel: AppViewModel, onBack: () -> Unit) {
                     val result = viewModel.submitScoreExchange(score)
                     if (result.message.isNotEmpty()) showToast(result.message)
                 }
-            }
+            },
         )
     }
 }
@@ -284,38 +262,31 @@ private fun ScoreExchangeCard(
     dynamicColor: Boolean,
     isLoggedIn: Boolean,
     onSelectWallet: (String) -> Unit,
-    onRequestExchange: (Int) -> Unit
+    onRequestExchange: (Int) -> Unit,
 ) {
     val activeWallet = wallets.firstOrNull { it.id == activeWalletId } ?: wallets.firstOrNull()
-    val entries = remember(wallets, activeWallet?.id) {
-        listOf(
-            DropdownEntry(
-                items = wallets.map { wallet ->
-                    DropdownItem(
-                        text = wallet.name.ifEmpty { "钱包" },
-                        selected = wallet.id == activeWallet?.id,
-                        onClick = { onSelectWallet(wallet.id) }
-                    )
-                }
+    val entries =
+        remember(wallets, activeWallet?.id) {
+            listOf(
+                DropdownEntry(
+                    items =
+                        wallets.map { wallet ->
+                            DropdownItem(
+                                text = wallet.name.ifEmpty { "钱包" },
+                                selected = wallet.id == activeWallet?.id,
+                                onClick = { onSelectWallet(wallet.id) },
+                            )
+                        },
+                ),
             )
-        )
-    }
+        }
     var selectedAmount by remember { mutableStateOf<Int?>(null) }
 
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Text(
-                text = "可兑档位",
-                style = MiuixTheme.textStyles.title2,
-                color = MiuixTheme.colorScheme.onSurface
-            )
-            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+            SectionHeader("可兑档位")
             if (!isLoggedIn) {
-                Text(
-                    text = "请先登录",
-                    style = MiuixTheme.textStyles.body2,
-                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary
-                )
+                EmptyStateText(isLoggedIn = false)
             } else {
                 OverlayDropdownMenu(
                     entries = entries,
@@ -326,30 +297,31 @@ private fun ScoreExchangeCard(
                             imageVector = MiuixIcons.BankCards,
                             contentDescription = null,
                             modifier = Modifier.size(24.dp),
-                            tint = MiuixTheme.colorScheme.onSurface
+                            tint = MiuixTheme.colorScheme.onSurface,
                         )
                     },
-                    enabled = wallets.isNotEmpty()
+                    enabled = wallets.isNotEmpty(),
                 )
                 Spacer(modifier = Modifier.height(12.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     SCORE_EXCHANGE_AMOUNTS.forEach { amount ->
                         Button(
                             modifier = Modifier.weight(1f),
                             onClick = { selectedAmount = amount },
                             enabled = !submitting && available >= amount,
-                            colors = if (selectedAmount == amount) {
-                                ButtonDefaults.buttonColorsPrimary()
-                            } else {
-                                ButtonDefaults.buttonColors()
-                            }
+                            colors =
+                                if (selectedAmount == amount) {
+                                    ButtonDefaults.buttonColorsPrimary()
+                                } else {
+                                    ButtonDefaults.buttonColors()
+                                },
                         ) {
                             Text(
-                                text = "$amount 积分\n¥${formatTwoDecimals(amount / 1000.0)}",
-                                textAlign = TextAlign.Center
+                                text = "$amount 积分\n¥${formatMoney(amount / 1000.0)}",
+                                textAlign = TextAlign.Center,
                             )
                         }
                     }
@@ -358,9 +330,10 @@ private fun ScoreExchangeCard(
                 Button(
                     modifier = Modifier.fillMaxWidth(),
                     onClick = { selectedAmount?.let(onRequestExchange) },
-                    enabled = selectedAmount != null && activeWallet != null &&
-                        !submitting && available >= (selectedAmount ?: 0),
-                    colors = primaryButtonColors(dynamicColor)
+                    enabled =
+                        selectedAmount != null && activeWallet != null &&
+                            !submitting && available >= (selectedAmount ?: 0),
+                    colors = primaryButtonColors(dynamicColor),
                 ) {
                     Text(text = if (submitting) "兑换中…" else "立即兑换")
                 }
@@ -378,95 +351,73 @@ private fun ScoreExchangeDialog(
     dynamicColor: Boolean,
     submitting: Boolean,
     onDismiss: () -> Unit,
-    onConfirm: (Int) -> Unit
+    onConfirm: (Int) -> Unit,
 ) {
     var quantityText by remember(unitScore) { mutableStateOf("1") }
     val quantity = quantityText.toIntOrNull()
     val maxQuantity = if (unitScore > 0) available / unitScore else 0
     val total = quantity?.takeIf { it in 1..maxQuantity }?.let { unitScore * it }
 
-    WindowDialog(
-        show = true,
-        onDismissRequest = onDismiss,
+    ConfirmDialog(
         title = "确认积分兑换",
-        content = {
-            WindowBlurEffect(useBlur = appBlur)
-            val dismiss = LocalDismissState.current
-            Column {
-                Text(
-                    text = "兑换到：$walletName",
-                    style = MiuixTheme.textStyles.subtitle,
-                    color = MiuixTheme.colorScheme.onSurface
-                )
-                Text(
-                    text = "每份 $unitScore 积分 = ¥${formatTwoDecimals(unitScore / 1000.0)}",
-                    style = MiuixTheme.textStyles.body2,
-                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                    modifier = Modifier.padding(top = 4.dp)
-                )
-                Spacer(modifier = Modifier.height(12.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    TextButton(
-                        onClick = { quantityText = ((quantity ?: 1) - 1).coerceAtLeast(1).toString() },
-                        enabled = !submitting && quantity != null && quantity > 1,
-                        text = "−"
-                    )
-                    TextField(
-                        value = quantityText,
-                        onValueChange = { quantityText = it.filter { c -> c.isDigit() }.take(6) },
-                        modifier = Modifier.weight(1f),
-                        label = "份数"
-                    )
-                    TextButton(
-                        onClick = { quantityText = ((quantity ?: 0) + 1).coerceAtMost(maxQuantity).toString() },
-                        enabled = !submitting && quantity != null && quantity < maxQuantity,
-                        text = "＋"
-                    )
-                }
-                Text(
-                    text = "可用积分：$available，最多 $maxQuantity 份",
-                    style = MiuixTheme.textStyles.body2,
-                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                    modifier = Modifier.padding(top = 8.dp)
-                )
-                Text(
-                    text = total?.let { "合计消耗 $it 积分，兑换 ¥${formatTwoDecimals(it / 1000.0)}" }
-                        ?: "请输入 1～$maxQuantity 之间的整数份数",
-                    style = MiuixTheme.textStyles.subtitle,
-                    fontWeight = FontWeight.Medium,
-                    color = MiuixTheme.colorScheme.onSurface,
-                    modifier = Modifier.padding(top = 4.dp)
-                )
-                Spacer(modifier = Modifier.height(24.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    TextButton(
-                        modifier = Modifier.weight(1f),
-                        onClick = { dismiss?.invoke() },
-                        enabled = !submitting,
-                        text = "取消"
-                    )
-                    TextButton(
-                        modifier = Modifier.weight(1f),
-                        onClick = { total?.let(onConfirm) },
-                        enabled = total != null && !submitting,
-                        text = if (submitting) "兑换中…" else "确认兑换",
-                        colors = if (dynamicColor) {
-                            ButtonDefaults.textButtonColorsPrimary()
-                        } else {
-                            ButtonDefaults.textButtonColors()
-                        }
-                    )
-                }
-            }
+        appBlur = appBlur,
+        confirmText = if (submitting) "兑换中…" else "确认兑换",
+        cancelEnabled = !submitting,
+        confirmEnabled = total != null && !submitting,
+        primary = dynamicColor,
+        onConfirm = { total?.let(onConfirm) },
+        onDismiss = onDismiss,
+    ) {
+        Text(
+            text = "兑换到：$walletName",
+            style = MiuixTheme.textStyles.subtitle,
+            color = MiuixTheme.colorScheme.onSurface,
+        )
+        Text(
+            text = "每份 $unitScore 积分 = ¥${formatMoney(unitScore / 1000.0)}",
+            style = MiuixTheme.textStyles.body2,
+            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+            modifier = Modifier.padding(top = 4.dp),
+        )
+        Spacer(modifier = Modifier.height(12.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            TextButton(
+                onClick = { quantityText = ((quantity ?: 1) - 1).coerceAtLeast(1).toString() },
+                enabled = !submitting && quantity != null && quantity > 1,
+                text = "−",
+            )
+            TextField(
+                value = quantityText,
+                onValueChange = { quantityText = it.filter { c -> c.isDigit() }.take(6) },
+                modifier = Modifier.weight(1f),
+                label = "份数",
+            )
+            TextButton(
+                onClick = { quantityText = ((quantity ?: 0) + 1).coerceAtMost(maxQuantity).toString() },
+                enabled = !submitting && quantity != null && quantity < maxQuantity,
+                text = "＋",
+            )
         }
-    )
+        Text(
+            text = "可用积分：$available，最多 $maxQuantity 份",
+            style = MiuixTheme.textStyles.body2,
+            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+            modifier = Modifier.padding(top = 8.dp),
+        )
+        Text(
+            text =
+                total?.let { "合计消耗 $it 积分，兑换 ¥${formatMoney(it / 1000.0)}" }
+                    ?: "请输入 1～$maxQuantity 之间的整数份数",
+            style = MiuixTheme.textStyles.subtitle,
+            fontWeight = FontWeight.Medium,
+            color = MiuixTheme.colorScheme.onSurface,
+            modifier = Modifier.padding(top = 4.dp),
+        )
+    }
 }
 
 @Composable
@@ -474,53 +425,45 @@ private fun ScoreRecordsCard(
     records: List<ScoreRecord>,
     loadingMore: Boolean,
     hasMore: Boolean,
-    isLoggedIn: Boolean
+    isLoggedIn: Boolean,
 ) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Text(
-                text = "积分记录",
-                style = MiuixTheme.textStyles.title2,
-                color = MiuixTheme.colorScheme.onSurface
-            )
-            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+            SectionHeader("积分记录")
             if (records.isEmpty()) {
-                Text(
-                    text = if (!isLoggedIn) "请先登录" else "暂无数据",
-                    style = MiuixTheme.textStyles.body2,
-                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary
-                )
+                EmptyStateText(isLoggedIn)
             } else {
                 records.forEach { record ->
                     Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 6.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 6.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 text = record.name,
                                 style = MiuixTheme.textStyles.subtitle,
-                                color = MiuixTheme.colorScheme.onSurface
+                                color = MiuixTheme.colorScheme.onSurface,
                             )
                             Text(
-                                text = formatScoreTime(record.time),
+                                text = formatDateTime(record.time),
                                 style = MiuixTheme.textStyles.body2,
-                                color = MiuixTheme.colorScheme.onSurfaceVariantSummary
+                                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                             )
                         }
                         Text(
                             text = if (record.score > 0) "+${record.score}" else "${record.score}",
                             style = MiuixTheme.textStyles.title3,
                             fontWeight = FontWeight.Medium,
-                            color = if (record.score > 0) MiuixTheme.colorScheme.primary else MiuixTheme.colorScheme.error
+                            color = if (record.score > 0) MiuixTheme.colorScheme.primary else MiuixTheme.colorScheme.error,
                         )
                     }
                 }
-                ScoreListFooter(
+                ListLoadMoreFooter(
                     loadingMore = loadingMore,
-                    hasMore = hasMore
+                    hasMore = hasMore,
                 )
             }
         }
@@ -528,72 +471,34 @@ private fun ScoreRecordsCard(
 }
 
 @Composable
-private fun ScoreSummaryItem(label: String, value: Int?, alignEnd: Boolean) {
+private fun ScoreSummaryItem(
+    label: String,
+    value: Int?,
+    alignEnd: Boolean,
+) {
     Column(horizontalAlignment = if (alignEnd) Alignment.End else Alignment.Start) {
         Text(
             text = label,
             style = MiuixTheme.textStyles.body2,
-            color = MiuixTheme.colorScheme.onSurfaceVariantSummary
+            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
         )
         Text(
             text = value?.toString() ?: "-",
             style = MiuixTheme.textStyles.title1,
-            color = MiuixTheme.colorScheme.onSurface
+            color = MiuixTheme.colorScheme.onSurface,
         )
         Text(
-            text = "≈${formatTwoDecimals((value ?: 0) / 1000.0)}元",
+            text = "≈${formatMoney((value ?: 0) / 1000.0)}元",
             style = MiuixTheme.textStyles.body2,
             color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-            modifier = Modifier.padding(top = 2.dp)
+            modifier = Modifier.padding(top = 2.dp),
         )
     }
 }
 
-@Composable
-private fun ScoreListFooter(loadingMore: Boolean, hasMore: Boolean) {
-    when {
-        loadingMore -> Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 12.dp),
-            horizontalArrangement = Arrangement.Center,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            InfiniteProgressIndicator(
-                modifier = Modifier.size(18.dp),
-                size = 18.dp,
-                strokeWidth = 2.dp,
-                orbitingDotSize = 3.dp
-            )
-        }
-
-        !hasMore -> Text(
-            text = "已加载全部记录",
-            style = MiuixTheme.textStyles.body2,
-            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 12.dp)
-        )
+private fun scoreFilterLabel(filter: ScoreFilter): String =
+    when (filter) {
+        ScoreFilter.All -> "全部"
+        ScoreFilter.Income -> "收入"
+        ScoreFilter.Expense -> "支出"
     }
-}
-
-private fun formatScoreTime(time: String): String {
-    if (time.isEmpty()) return ""
-    val ts = time.toLongOrNull() ?: return time
-    return formatTimestamp(ts, "yyyy-MM-dd HH:mm:ss")
-}
-
-private fun formatTwoDecimals(value: Double): String {
-    val negative = value < 0
-    val scaled = round(kotlin.math.abs(value) * 100).toLong()
-    val intPart = scaled / 100
-    val frac = (scaled % 100).toString().padStart(2, '0')
-    return (if (negative) "-" else "") + "$intPart.$frac"
-}
-
-private fun scoreFilterLabel(filter: ScoreFilter): String = when (filter) {
-    ScoreFilter.All -> "全部"
-    ScoreFilter.Income -> "收入"
-    ScoreFilter.Expense -> "支出"
-}

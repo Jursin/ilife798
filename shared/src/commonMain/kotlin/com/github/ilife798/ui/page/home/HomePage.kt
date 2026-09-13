@@ -9,40 +9,46 @@ import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import top.yukonga.miuix.kmp.basic.ButtonDefaults
+import com.github.ilife798.DeviceTile
+import com.github.ilife798.DeviceTileResult
+import com.github.ilife798.copyToClipboard
+import com.github.ilife798.data.model.HomeDeviceType
+import com.github.ilife798.data.viewmodel.AppViewModel
+import com.github.ilife798.showToast
+import com.github.ilife798.ui.component.AppPullToRefresh
+import com.github.ilife798.ui.component.BlurredTopAppBar
+import com.github.ilife798.ui.component.ConfirmDialog
+import com.github.ilife798.ui.component.EmptyStateText
+import com.github.ilife798.ui.component.PageScrollColumn
+import com.github.ilife798.ui.theme.RunningYellow
+import com.github.ilife798.ui.theme.rememberAppBlurBackdrop
+import com.github.ilife798.util.formatMoney
 import top.yukonga.miuix.kmp.basic.Card
+import top.yukonga.miuix.kmp.basic.CardDefaults
 import top.yukonga.miuix.kmp.basic.DropdownEntry
 import top.yukonga.miuix.kmp.basic.DropdownItem
 import top.yukonga.miuix.kmp.basic.HorizontalDivider
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
-import top.yukonga.miuix.kmp.basic.PullToRefresh
 import top.yukonga.miuix.kmp.basic.RadioButton
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.basic.TextButton
-import top.yukonga.miuix.kmp.basic.TopAppBar
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Add
 import top.yukonga.miuix.kmp.icon.extended.Delete
@@ -50,95 +56,63 @@ import top.yukonga.miuix.kmp.icon.extended.More
 import top.yukonga.miuix.kmp.icon.extended.Pause
 import top.yukonga.miuix.kmp.icon.extended.Play
 import top.yukonga.miuix.kmp.menu.OverlayIconDropdownMenu
-import top.yukonga.miuix.kmp.theme.LocalDismissState
 import top.yukonga.miuix.kmp.theme.MiuixTheme
-import top.yukonga.miuix.kmp.utils.overScrollVertical
-import top.yukonga.miuix.kmp.utils.scrollEndHaptic
-import top.yukonga.miuix.kmp.window.WindowDialog
-import com.github.ilife798.copyTextToClipboard
-import com.github.ilife798.DeviceTile
-import com.github.ilife798.DeviceTileResult
-import com.github.ilife798.data.model.HomeDeviceType
-import com.github.ilife798.data.viewmodel.AppViewModel
-import com.github.ilife798.showToast
-import com.github.ilife798.ui.theme.WindowBlurEffect
-import com.github.ilife798.ui.theme.appBarBlur
-import com.github.ilife798.ui.theme.blurAppBarColor
-import com.github.ilife798.ui.theme.captureForBlur
-import com.github.ilife798.ui.theme.rememberAppBlurBackdrop
-import top.yukonga.miuix.kmp.basic.CardDefaults
-import kotlin.math.abs
-import kotlin.math.round
 
 @Composable
-fun HomePage(viewModel: AppViewModel, onDeviceAddClick: () -> Unit = {}, bottomPadding: Dp) {
+fun HomePage(
+    viewModel: AppViewModel,
+    onDeviceAddClick: () -> Unit = {},
+    bottomPadding: Dp,
+) {
     val state = viewModel.state
     val scrollBehavior = MiuixScrollBehavior()
     val blurBackdrop = rememberAppBlurBackdrop(state.appBlur)
 
     Scaffold(
-        topBar = {
-            TopAppBar(
-                title = "首页",
-                modifier = Modifier.appBarBlur(blurBackdrop),
-                color = blurAppBarColor(blurBackdrop),
-                scrollBehavior = scrollBehavior
-            )
-        }
+        topBar = { BlurredTopAppBar("首页", blurBackdrop, scrollBehavior) },
     ) { paddingValues ->
-        PullToRefresh(
-            isRefreshing = viewModel.homeRefreshing,
-            onRefresh = { viewModel.refreshHome() },
-            modifier = Modifier.fillMaxSize(),
-            topAppBarScrollBehavior = scrollBehavior,
-            contentPadding = paddingValues,
-            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-            refreshTexts = listOf("下拉刷新", "松开刷新", "正在刷新…", "刷新完成")
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .captureForBlur(blurBackdrop)
-                    .nestedScroll(scrollBehavior.nestedScrollConnection)
-                    .scrollEndHaptic()
-                    .overScrollVertical()
-                    .verticalScroll(rememberScrollState())
-                    .padding(paddingValues)
-                    .padding(horizontal = 16.dp)
-                    .padding(top = 8.dp, bottom = bottomPadding),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+        AppPullToRefresh(viewModel.homeRefreshing, { viewModel.refreshHome() }, scrollBehavior, paddingValues) {
+            PageScrollColumn(
+                blurBackdrop = blurBackdrop,
+                scrollBehavior = scrollBehavior,
+                contentPadding = paddingValues,
+                bottomPadding = bottomPadding,
             ) {
                 val stats = viewModel.spendingStats
-                val isLoggedIn = state.account.appToken.isNotEmpty() || state.account.token.isNotEmpty()
+                val isLoggedIn = state.account.hasAnyToken
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(IntrinsicSize.Min),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .height(IntrinsicSize.Min),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     SpendingCard(
                         label = "昨日花费",
                         value = stats.yesterday,
                         isLoggedIn = isLoggedIn,
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxHeight()
+                        modifier =
+                            Modifier
+                                .weight(1f)
+                                .fillMaxHeight(),
                     )
                     SpendingCard(
                         label = "今日花费",
                         value = stats.today,
                         isLoggedIn = isLoggedIn,
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxHeight()
+                        modifier =
+                            Modifier
+                                .weight(1f)
+                                .fillMaxHeight(),
                     )
                     SpendingCard(
                         label = "本月平均花费",
                         value = stats.monthAverage,
                         isLoggedIn = isLoggedIn,
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxHeight()
+                        modifier =
+                            Modifier
+                                .weight(1f)
+                                .fillMaxHeight(),
                     )
                 }
                 DeviceCard(viewModel, onDeviceAddClick)
@@ -148,50 +122,48 @@ fun HomePage(viewModel: AppViewModel, onDeviceAddClick: () -> Unit = {}, bottomP
 }
 
 @Composable
-private fun SpendingCard(label: String, value: Double, isLoggedIn: Boolean, modifier: Modifier = Modifier) {
+private fun SpendingCard(
+    label: String,
+    value: Double,
+    isLoggedIn: Boolean,
+    modifier: Modifier = Modifier,
+) {
     Card(modifier = modifier) {
         Column(modifier = Modifier.padding(12.dp)) {
             Text(
                 text = label,
                 style = MiuixTheme.textStyles.body2,
-                color = MiuixTheme.colorScheme.onSurfaceVariantSummary
+                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
             )
             Text(
                 text = if (isLoggedIn) "¥${formatMoney(value)}" else "--",
                 style = MiuixTheme.textStyles.title2,
-                color = MiuixTheme.colorScheme.onSurface
+                color = MiuixTheme.colorScheme.onSurface,
             )
         }
     }
 }
 
-private fun formatMoney(value: Double): String {
-    val negative = value < 0
-    val scaled = round(abs(value) * 100).toLong()
-    val intPart = scaled / 100
-    val frac = (scaled % 100).toString().padStart(2, '0')
-    return (if (negative) "-" else "") + "$intPart.$frac"
-}
-
 @Composable
-private fun DeviceCard(viewModel: AppViewModel, onDeviceAddClick: () -> Unit) {
+private fun DeviceCard(
+    viewModel: AppViewModel,
+    onDeviceAddClick: () -> Unit,
+) {
     val allDevices = viewModel.state.devices
     val homeType = viewModel.homeDeviceType
-    val devices = remember(allDevices, homeType) {
-        allDevices.filter { HomeDeviceType.fromDeviceType(it.dtype) == homeType }
-    }
-    val isLoggedIn = viewModel.state.account.appToken.isNotEmpty() || viewModel.state.account.token.isNotEmpty()
+    val devices =
+        remember(allDevices, homeType) {
+            allDevices.filter { HomeDeviceType.fromDeviceType(it.dtype) == homeType }
+        }
+    val isLoggedIn = viewModel.state.account.hasAnyToken
 
-    // Toggle device dialog state
     var toggleDeviceId by remember { mutableStateOf<String?>(null) }
     var toggleDeviceName by remember { mutableStateOf("") }
     var toggleIsRunning by remember { mutableStateOf(false) }
 
-    // Remove device dialog state
     var removeDeviceId by remember { mutableStateOf<String?>(null) }
     var removeDeviceName by remember { mutableStateOf("") }
 
-    // Create quick-settings tile dialog state
     var tileDeviceId by remember { mutableStateOf<String?>(null) }
     var tileDeviceName by remember { mutableStateOf("") }
 
@@ -213,63 +185,74 @@ private fun DeviceCard(viewModel: AppViewModel, onDeviceAddClick: () -> Unit) {
         viewModel.consumeExternalDeviceStart()
     }
 
-    val deviceTypeEntry = remember(viewModel.homeDeviceType) {
-        DropdownEntry(
-            items = HomeDeviceType.entries.map { type ->
-                DropdownItem(
-                    text = type.label,
-                    selected = viewModel.homeDeviceType == type,
-                    onClick = { viewModel.selectHomeDeviceType(type) }
-                )
-            }
-        )
-    }
+    val deviceTypeEntry =
+        remember(viewModel.homeDeviceType) {
+            DropdownEntry(
+                items =
+                    HomeDeviceType.entries.map { type ->
+                        DropdownItem(
+                            text = type.label,
+                            selected = viewModel.homeDeviceType == type,
+                            onClick = { viewModel.selectHomeDeviceType(type) },
+                        )
+                    },
+            )
+        }
 
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
                     text = "设备",
                     style = MiuixTheme.textStyles.title2,
-                    color = MiuixTheme.colorScheme.onSurface
+                    color = MiuixTheme.colorScheme.onSurface,
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     IconButton(
                         enabled = isLoggedIn,
-                        onClick = onDeviceAddClick
+                        onClick = onDeviceAddClick,
                     ) {
                         Icon(
                             imageVector = MiuixIcons.Add,
                             contentDescription = "添加",
                             modifier = Modifier.size(20.dp),
-                            tint = if (isLoggedIn) MiuixTheme.colorScheme.onSurface else MiuixTheme.colorScheme.onSurface.copy(alpha = 0.3f)
+                            tint =
+                                if (isLoggedIn) {
+                                    MiuixTheme.colorScheme.onSurface
+                                } else {
+                                    MiuixTheme.colorScheme.onSurface.copy(
+                                        alpha = 0.3f,
+                                    )
+                                },
                         )
                     }
                     OverlayIconDropdownMenu(
                         entry = deviceTypeEntry,
-                        enabled = isLoggedIn
+                        enabled = isLoggedIn,
                     ) {
                         Icon(
                             imageVector = MiuixIcons.More,
                             contentDescription = "选择设备类型",
                             modifier = Modifier.size(20.dp),
-                            tint = if (isLoggedIn) MiuixTheme.colorScheme.onSurface else MiuixTheme.colorScheme.onSurface.copy(alpha = 0.3f)
+                            tint =
+                                if (isLoggedIn) {
+                                    MiuixTheme.colorScheme.onSurface
+                                } else {
+                                    MiuixTheme.colorScheme.onSurface.copy(
+                                        alpha = 0.3f,
+                                    )
+                                },
                         )
                     }
                 }
             }
             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
             if (devices.isEmpty()) {
-                Text(
-                    text = if (!isLoggedIn) "请先登录" else "暂无${homeType.label}设备",
-                    style = MiuixTheme.textStyles.body2,
-                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                    modifier = Modifier.padding(vertical = 8.dp)
-                )
+                EmptyStateText(isLoggedIn, emptyText = "暂无${homeType.label}设备")
             } else {
                 devices.forEachIndexed { index, device ->
                     if (index > 0) {
@@ -294,7 +277,7 @@ private fun DeviceCard(viewModel: AppViewModel, onDeviceAddClick: () -> Unit) {
                         onLongPress = {
                             tileDeviceId = device.id
                             tileDeviceName = device.name.ifEmpty { device.id }
-                        }
+                        },
                     )
                 }
             }
@@ -304,57 +287,33 @@ private fun DeviceCard(viewModel: AppViewModel, onDeviceAddClick: () -> Unit) {
     if (devices.isNotEmpty() && !viewModel.homeTileCreated) {
         Card(
             modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.defaultColors(
-                color = MiuixTheme.colorScheme.primaryContainer.copy(alpha = 0.25f),
-                contentColor = MiuixTheme.colorScheme.onSurface
-            )
+            colors =
+                CardDefaults.defaultColors(
+                    color = MiuixTheme.colorScheme.primaryContainer.copy(alpha = 0.25f),
+                    contentColor = MiuixTheme.colorScheme.onSurface,
+                ),
         ) {
             Text(
                 text = "长按设备创建快捷设置图块。",
                 style = MiuixTheme.textStyles.body2,
                 color = MiuixTheme.colorScheme.primary,
                 fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.padding(16.dp)
+                modifier = Modifier.padding(16.dp),
             )
         }
     }
 
-    // Toggle device confirmation dialog
     if (toggleDeviceId != null) {
-        WindowDialog(
-            show = true,
-            onDismissRequest = { toggleDeviceId = null },
+        ConfirmDialog(
             title = if (toggleIsRunning) "停止设备" else "启动设备",
-            content = {
-                WindowBlurEffect(useBlur = viewModel.state.appBlur)
-                val dismiss = LocalDismissState.current
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(
-                        text = if (toggleIsRunning) "确定要停止 $toggleDeviceName 吗？"
-                        else "确定要启动 $toggleDeviceName 吗？"
-                    )
-                    Spacer(modifier = Modifier.height(24.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        TextButton(
-                            modifier = Modifier.weight(1f),
-                            onClick = { dismiss?.invoke() },
-                            text = "取消"
-                        )
-                        TextButton(
-                            modifier = Modifier.weight(1f),
-                            onClick = {
-                                toggleDeviceId?.let { viewModel.toggleDeviceRunning(it) }
-                                dismiss?.invoke()
-                            },
-                            text = if (toggleIsRunning) "停止" else "启动",
-                            colors = ButtonDefaults.textButtonColorsPrimary()
-                        )
-                    }
-                }
-            }
+            message = if (toggleIsRunning) "确定要停止 $toggleDeviceName 吗？" else "确定要启动 $toggleDeviceName 吗？",
+            appBlur = viewModel.state.appBlur,
+            confirmText = if (toggleIsRunning) "停止" else "启动",
+            onConfirm = {
+                toggleDeviceId?.let { viewModel.toggleDeviceRunning(it) }
+                toggleDeviceId = null
+            },
+            onDismiss = { toggleDeviceId = null },
         )
     }
 
@@ -362,188 +321,121 @@ private fun DeviceCard(viewModel: AppViewModel, onDeviceAddClick: () -> Unit) {
     val pendingStart = viewModel.pendingStart
     if (pendingStart != null) {
         var selectedIndex by remember(pendingStart) { mutableStateOf(0) }
-        WindowDialog(
-            show = true,
-            onDismissRequest = { viewModel.cancelPendingStart() },
+        ConfirmDialog(
             title = "启动设备",
-            content = {
-                WindowBlurEffect(useBlur = viewModel.state.appBlur)
-                val dismiss = LocalDismissState.current
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(
-                        text = "确定要启动 ${pendingStart.deviceName} 吗？",
-                        color = MiuixTheme.colorScheme.onSurface
-                    )
-                    val parts = pendingStart.options.parts
-                    if (parts.isNotEmpty()) {
-                        Spacer(modifier = Modifier.height(12.dp))
-                        parts.forEachIndexed { index, option ->
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable { selectedIndex = index }
-                                    .padding(vertical = 4.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                RadioButton(
-                                    selected = selectedIndex == index,
-                                    onClick = { selectedIndex = index }
-                                )
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = option.name.ifEmpty { "模式 ${option.mode}" },
-                                        style = MiuixTheme.textStyles.body2,
-                                        color = MiuixTheme.colorScheme.onSurface
-                                    )
-                                    val detail = buildList {
-                                        if (option.rate > 0.0) add("¥${formatMoney(option.rate)}")
-                                        if (option.maxT > 0) add("最长 ${option.maxT}")
-                                    }.joinToString(" · ")
-                                    if (detail.isNotEmpty()) {
-                                        Text(
-                                            text = detail,
-                                            style = MiuixTheme.textStyles.body2,
-                                            color = MiuixTheme.colorScheme.onSurfaceVariantSummary
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    } else if (pendingStart.options.subCount > 1) {
-                        Spacer(modifier = Modifier.height(12.dp))
-                        repeat(pendingStart.options.subCount) { index ->
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable { selectedIndex = index }
-                                    .padding(vertical = 4.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                RadioButton(
-                                    selected = selectedIndex == index,
-                                    onClick = { selectedIndex = index }
-                                )
+            message = "确定要启动 ${pendingStart.deviceName} 吗？",
+            appBlur = viewModel.state.appBlur,
+            confirmText = "启动",
+            onConfirm = { viewModel.confirmPendingStart(selectedIndex) },
+            onDismiss = { viewModel.cancelPendingStart() },
+        ) {
+            val parts = pendingStart.options.parts
+            if (parts.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(12.dp))
+                parts.forEachIndexed { index, option ->
+                    Row(
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .clickable { selectedIndex = index }
+                                .padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        RadioButton(
+                            selected = selectedIndex == index,
+                            onClick = { selectedIndex = index },
+                        )
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = option.name.ifEmpty { "模式 ${option.mode}" },
+                                style = MiuixTheme.textStyles.body2,
+                                color = MiuixTheme.colorScheme.onSurface,
+                            )
+                            val detail =
+                                buildList {
+                                    if (option.rate > 0.0) add("¥${formatMoney(option.rate)}")
+                                    if (option.maxT > 0) add("最长 ${option.maxT}")
+                                }.joinToString(" · ")
+                            if (detail.isNotEmpty()) {
                                 Text(
-                                    text = "通道 ${index + 1}",
+                                    text = detail,
                                     style = MiuixTheme.textStyles.body2,
-                                    color = MiuixTheme.colorScheme.onSurface
+                                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                                 )
                             }
                         }
                     }
-                    Spacer(modifier = Modifier.height(24.dp))
+                }
+            } else if (pendingStart.options.subCount > 1) {
+                Spacer(modifier = Modifier.height(12.dp))
+                repeat(pendingStart.options.subCount) { index ->
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .clickable { selectedIndex = index }
+                                .padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        TextButton(
-                            modifier = Modifier.weight(1f),
-                            onClick = { dismiss?.invoke() },
-                            text = "取消"
+                        RadioButton(
+                            selected = selectedIndex == index,
+                            onClick = { selectedIndex = index },
                         )
-                        TextButton(
-                            modifier = Modifier.weight(1f),
-                            onClick = {
-                                viewModel.confirmPendingStart(selectedIndex)
-                                dismiss?.invoke()
-                            },
-                            text = "启动",
-                            colors = ButtonDefaults.textButtonColorsPrimary()
+                        Text(
+                            text = "通道 ${index + 1}",
+                            style = MiuixTheme.textStyles.body2,
+                            color = MiuixTheme.colorScheme.onSurface,
                         )
                     }
                 }
             }
-        )
+        }
     }
 
     // 删除设备对话框
     if (removeDeviceId != null) {
-        WindowDialog(
-            show = true,
-            onDismissRequest = { removeDeviceId = null },
+        ConfirmDialog(
             title = "删除设备",
-            content = {
-                WindowBlurEffect(useBlur = viewModel.state.appBlur)
-                val dismiss = LocalDismissState.current
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(text = "确定要删除 $removeDeviceName 吗？")
-                    Spacer(modifier = Modifier.height(24.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        TextButton(
-                            modifier = Modifier.weight(1f),
-                            onClick = { dismiss?.invoke() },
-                            text = "取消"
-                        )
-                        TextButton(
-                            modifier = Modifier.weight(1f),
-                            onClick = {
-                                removeDeviceId?.let { viewModel.removeDevice(it) }
-                                dismiss?.invoke()
-                            },
-                            text = "删除",
-                            colors = ButtonDefaults.textButtonColors(
-                                textColor = MiuixTheme.colorScheme.error
-                            )
-                        )
-                    }
-                }
-            }
+            message = "确定要删除 $removeDeviceName 吗？",
+            appBlur = viewModel.state.appBlur,
+            confirmText = "删除",
+            destructive = true,
+            onConfirm = {
+                removeDeviceId?.let { viewModel.removeDevice(it) }
+                removeDeviceId = null
+            },
+            onDismiss = { removeDeviceId = null },
         )
     }
 
     // 创建设备快捷设置图块对话框
     if (tileDeviceId != null) {
-        WindowDialog(
-            show = true,
-            onDismissRequest = { tileDeviceId = null },
+        ConfirmDialog(
             title = "创建设备快捷设置图块",
-            content = {
-                WindowBlurEffect(useBlur = viewModel.state.appBlur)
-                val dismiss = LocalDismissState.current
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(text = "确定要创建设备快捷设置图块吗？")
-                    Spacer(modifier = Modifier.height(24.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        TextButton(
-                            modifier = Modifier.weight(1f),
-                            onClick = { dismiss?.invoke() },
-                            text = "取消"
-                        )
-                        TextButton(
-                            modifier = Modifier.weight(1f),
-                            onClick = {
-                                val id = tileDeviceId
-                                if (id != null) {
-                                    DeviceTile.bind(id, tileDeviceName) { result ->
-                                        if (result == DeviceTileResult.ADDED || result == DeviceTileResult.ALREADY_ADDED) {
-                                            viewModel.markHomeTileCreated()
-                                        }
-                                        showToast(
-                                            when (result) {
-                                                DeviceTileResult.ADDED -> "已添加设备快捷设置图块"
-                                                DeviceTileResult.ALREADY_ADDED -> "图块已存在，已更新为当前设备"
-                                                DeviceTileResult.UNSUPPORTED -> "请在快捷设置面板中手动添加图块"
-                                                DeviceTileResult.FAILED -> "创建失败"
-                                            }
-                                        )
-                                    }
-                                }
-                                dismiss?.invoke()
+            message = "确定要创建设备快捷设置图块吗？",
+            appBlur = viewModel.state.appBlur,
+            onConfirm = {
+                val id = tileDeviceId
+                if (id != null) {
+                    DeviceTile.bind(id, tileDeviceName) { result ->
+                        if (result == DeviceTileResult.ADDED || result == DeviceTileResult.ALREADY_ADDED) {
+                            viewModel.markHomeTileCreated()
+                        }
+                        showToast(
+                            when (result) {
+                                DeviceTileResult.ADDED -> "已添加设备快捷设置图块"
+                                DeviceTileResult.ALREADY_ADDED -> "图块已存在，已更新为当前设备"
+                                DeviceTileResult.UNSUPPORTED -> "请在快捷设置面板中手动添加图块"
+                                DeviceTileResult.FAILED -> "创建失败"
                             },
-                            text = "确定",
-                            colors = ButtonDefaults.textButtonColorsPrimary()
                         )
                     }
                 }
-            }
+                tileDeviceId = null
+            },
+            onDismiss = { tileDeviceId = null },
         )
     }
 }
@@ -555,90 +447,90 @@ private fun DeviceItem(
     isPolling: Boolean,
     onToggle: () -> Unit,
     onRemove: () -> Unit,
-    onLongPress: () -> Unit
+    onLongPress: () -> Unit,
 ) {
     val isRunning = device.geneStatus != 99
     val isOffline = device.deviceStatus == 0
     val canToggle = !isPolling && !isOffline
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .combinedClickable(
-                onClick = {
-                    if (copyTextToClipboard(device.id)) showToast("已复制设备编号")
-                    else showToast("复制失败")
-                },
-                onLongClick = onLongPress
-            )
-            .padding(vertical = 8.dp),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .combinedClickable(
+                    onClick = {
+                        copyToClipboard(device.id, "已复制设备编号")
+                    },
+                    onLongClick = onLongPress,
+                ).padding(vertical = 8.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = device.name.ifEmpty { device.id },
                 style = MiuixTheme.textStyles.title3,
-                color = MiuixTheme.colorScheme.onSurface
+                color = MiuixTheme.colorScheme.onSurface,
             )
             if (device.name.isNotEmpty()) {
                 Text(
                     text = device.id,
                     style = MiuixTheme.textStyles.body2,
-                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary
+                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                 )
             }
         }
         Row(
             horizontalArrangement = Arrangement.spacedBy(4.dp),
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             if (isRunning) {
                 Text(
                     text = "运行中",
                     style = MiuixTheme.textStyles.body2,
-                    color = Color(0xFFFFD13D),
-                    modifier = Modifier.padding(horizontal = 8.dp)
+                    color = RunningYellow,
+                    modifier = Modifier.padding(horizontal = 8.dp),
                 )
             } else if (isOffline) {
                 Text(
                     text = "离线",
                     style = MiuixTheme.textStyles.body2,
                     color = MiuixTheme.colorScheme.error,
-                    modifier = Modifier.padding(horizontal = 8.dp)
+                    modifier = Modifier.padding(horizontal = 8.dp),
                 )
             } else {
                 Text(
                     text = "在线",
                     style = MiuixTheme.textStyles.body2,
                     color = MiuixTheme.colorScheme.primary,
-                    modifier = Modifier.padding(horizontal = 8.dp)
+                    modifier = Modifier.padding(horizontal = 8.dp),
                 )
             }
             IconButton(
                 enabled = canToggle,
-                onClick = onToggle
+                onClick = onToggle,
             ) {
                 Icon(
                     imageVector = if (isRunning) MiuixIcons.Pause else MiuixIcons.Play,
                     contentDescription = if (isRunning) "停止" else "启动",
                     modifier = Modifier.size(20.dp),
-                    tint = when {
-                        isRunning && canToggle -> Color(0xFFFFD13D)  // 运行中且可操作：黄色
-                        isRunning && !canToggle -> Color(0xFFFFD13D).copy(alpha = 0.3f)  // 运行中不可操作：淡黄
-                        !isRunning && canToggle -> MiuixTheme.colorScheme.primary  // 非运行且可操作：蓝色
-                        else -> MiuixTheme.colorScheme.primary.copy(alpha = 0.3f)  // 非运行不可操作：淡蓝
-                    }
+                    tint =
+                        when {
+                            isRunning && canToggle -> RunningYellow
+                            isRunning && !canToggle -> RunningYellow.copy(alpha = 0.3f)
+                            !isRunning && canToggle -> MiuixTheme.colorScheme.primary
+                            else -> MiuixTheme.colorScheme.primary.copy(alpha = 0.3f)
+                        },
                 )
             }
             IconButton(
                 enabled = !isPolling,
-                onClick = onRemove
+                onClick = onRemove,
             ) {
                 Icon(
                     imageVector = MiuixIcons.Delete,
                     contentDescription = "删除",
                     modifier = Modifier.size(20.dp),
-                    tint = if (!isPolling) MiuixTheme.colorScheme.error else MiuixTheme.colorScheme.error.copy(alpha = 0.3f)
+                    tint = if (!isPolling) MiuixTheme.colorScheme.error else MiuixTheme.colorScheme.error.copy(alpha = 0.3f),
                 )
             }
         }

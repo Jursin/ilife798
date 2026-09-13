@@ -10,17 +10,20 @@ import io.ktor.http.contentType
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.serialization.json.Json
 
-actual fun createHttpClient(): HttpClient = HttpClient(OkHttp) {
-    install(ContentNegotiation) {
-        json(Json {
-            ignoreUnknownKeys = true
-            isLenient = true
-        })
+actual fun createHttpClient(): HttpClient =
+    HttpClient(OkHttp) {
+        install(ContentNegotiation) {
+            json(
+                Json {
+                    ignoreUnknownKeys = true
+                    isLenient = true
+                },
+            )
+        }
+        defaultRequest {
+            contentType(ContentType.Application.Json)
+            header("Accept-Language", "zh-Hans-CN;q=1")
+            header("User-Agent", ApiConfig.USER_AGENT)
+            header("VersionCode", ApiConfig.VERSION_CODE)
+        }
     }
-    defaultRequest {
-        contentType(ContentType.Application.Json)
-        header("Accept-Language", "zh-Hans-CN;q=1")
-        header("User-Agent", ApiConfig.USER_AGENT)
-        header("VersionCode", ApiConfig.VERSION_CODE)
-    }
-}

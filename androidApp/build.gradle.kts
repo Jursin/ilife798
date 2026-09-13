@@ -4,6 +4,18 @@ import java.util.Properties
 plugins {
     alias(libs.plugins.androidApplication)
     alias(libs.plugins.composeCompiler)
+    alias(libs.plugins.spotless)
+}
+
+repositories {
+    google {
+        mavenContent {
+            includeGroupByRegex("androidx(\\..*)?")
+            includeGroupByRegex("com\\.android(\\..*)?")
+            includeGroupByRegex("com\\.google(\\..*)?")
+        }
+    }
+    mavenCentral()
 }
 
 kotlin {
@@ -18,15 +30,17 @@ dependencies {
     implementation(libs.androidx.activity.compose)
 }
 
-val localProps = Properties().apply {
-    val f = rootProject.file("local.properties")
-    if (f.exists()) f.inputStream().use { load(it) }
-}
+val localProps =
+    Properties().apply {
+        val f = rootProject.file("local.properties")
+        if (f.exists()) f.inputStream().use { load(it) }
+    }
 
-val secretsProps = Properties().apply {
-    val f = rootProject.file("secrets.properties")
-    if (f.exists()) f.inputStream().use { load(it) }
-}
+val secretsProps =
+    Properties().apply {
+        val f = rootProject.file("secrets.properties")
+        if (f.exists()) f.inputStream().use { load(it) }
+    }
 
 android {
     namespace = "com.github.ilife798"
@@ -45,11 +59,12 @@ android {
     }
     packaging {
         resources {
-            excludes += setOf(
-                "/META-INF/{AL2.0,LGPL2.1}",
-                "DebugProbesKt.bin",
-                "kotlin-tooling-metadata.json"
-            )
+            excludes +=
+                setOf(
+                    "/META-INF/{AL2.0,LGPL2.1}",
+                    "DebugProbesKt.bin",
+                    "kotlin-tooling-metadata.json",
+                )
         }
     }
     val releaseStoreFile = localProps.getProperty("signing.storeFile", "")
@@ -69,7 +84,7 @@ android {
             isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
-                "proguard-rules.pro"
+                "proguard-rules.pro",
             )
             if (releaseStoreFile.isNotEmpty()) {
                 signingConfig = signingConfigs.getByName("release")

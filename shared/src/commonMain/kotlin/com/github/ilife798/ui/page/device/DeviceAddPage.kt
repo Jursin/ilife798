@@ -1,5 +1,6 @@
 package com.github.ilife798.ui.page.device
 
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -9,14 +10,13 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -26,8 +26,13 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.unit.dp
-import top.yukonga.miuix.kmp.basic.Button
+import com.github.ilife798.data.viewmodel.AppViewModel
+import com.github.ilife798.ui.theme.appBarBlur
+import com.github.ilife798.ui.theme.blurAppBarColor
+import com.github.ilife798.ui.theme.captureForBlur
 import com.github.ilife798.ui.theme.primaryButtonColors
+import com.github.ilife798.ui.theme.rememberAppBlurBackdrop
+import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
@@ -37,22 +42,17 @@ import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.basic.TopAppBar
 import top.yukonga.miuix.kmp.icon.MiuixIcons
-import com.github.ilife798.ui.theme.captureForBlur
+import top.yukonga.miuix.kmp.icon.extended.Add
 import top.yukonga.miuix.kmp.icon.extended.Back
+import top.yukonga.miuix.kmp.icon.extended.Scan
 import top.yukonga.miuix.kmp.utils.overScrollVertical
 import top.yukonga.miuix.kmp.utils.scrollEndHaptic
-import com.github.ilife798.data.viewmodel.AppViewModel
-import com.github.ilife798.ui.theme.appBarBlur
-import com.github.ilife798.ui.theme.blurAppBarColor
-import com.github.ilife798.ui.theme.rememberAppBlurBackdrop
-import top.yukonga.miuix.kmp.icon.extended.Add
-import top.yukonga.miuix.kmp.icon.extended.Scan
 
 @Composable
 fun DeviceAddPage(
     viewModel: AppViewModel,
     onBack: () -> Unit,
-    onScanClick: () -> Unit = {}
+    onScanClick: () -> Unit = {},
 ) {
     var deviceId by remember { mutableStateOf("") }
     val focusManager = LocalFocusManager.current
@@ -88,32 +88,32 @@ fun DeviceAddPage(
                     IconButton(onClick = onBack) {
                         Icon(
                             imageVector = MiuixIcons.Back,
-                            contentDescription = "返回"
+                            contentDescription = "返回",
                         )
                     }
                 },
-                scrollBehavior = scrollBehavior
+                scrollBehavior = scrollBehavior,
             )
         },
-        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection)
+        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
     ) { paddingValues ->
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .captureForBlur(blurBackdrop)
-                .pointerInput(Unit) {
-                    detectTapGestures {
-                        focusManager.clearFocus()
-                        keyboard?.hide()
-                    }
-                }
-                .scrollEndHaptic()
-                .overScrollVertical()
-                .verticalScroll(rememberScrollState())
-                .padding(paddingValues)
-                .padding(horizontal = 16.dp)
-                .padding(top = 8.dp, bottom = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .captureForBlur(blurBackdrop)
+                    .pointerInput(Unit) {
+                        detectTapGestures {
+                            focusManager.clearFocus()
+                            keyboard?.hide()
+                        }
+                    }.scrollEndHaptic()
+                    .overScrollVertical()
+                    .verticalScroll(rememberScrollState())
+                    .padding(paddingValues)
+                    .padding(horizontal = 16.dp)
+                    .padding(top = 8.dp, bottom = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Card(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(16.dp)) {
@@ -121,14 +121,14 @@ fun DeviceAddPage(
                         value = deviceId,
                         onValueChange = { deviceId = it },
                         modifier = Modifier.fillMaxWidth().focusRequester(deviceIdFocusRequester),
-                        label = "设备编号"
+                        label = "设备编号",
                     )
 
                     Spacer(modifier = Modifier.height(16.dp))
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
                         Button(
                             modifier = Modifier.weight(1f),
@@ -136,11 +136,11 @@ fun DeviceAddPage(
                                 focusManager.clearFocus()
                                 onScanClick()
                             },
-                            colors = primaryButtonColors(dynamicColor)
+                            colors = primaryButtonColors(dynamicColor),
                         ) {
                             Icon(
                                 imageVector = MiuixIcons.Scan,
-                                contentDescription = "扫描"
+                                contentDescription = "扫描",
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(text = "扫一扫")
@@ -154,11 +154,11 @@ fun DeviceAddPage(
                                 }
                             },
                             enabled = deviceId.isNotBlank(),
-                            colors = primaryButtonColors(dynamicColor)
+                            colors = primaryButtonColors(dynamicColor),
                         ) {
                             Icon(
                                 imageVector = MiuixIcons.Add,
-                                contentDescription = "添加"
+                                contentDescription = "添加",
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(text = "添加")

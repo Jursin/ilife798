@@ -1,92 +1,56 @@
 package com.github.ilife798.ui.page.me
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.toArgb
-import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
-import top.yukonga.miuix.kmp.basic.BasicComponent
+import com.github.ilife798.data.viewmodel.AppViewModel
+import com.github.ilife798.ui.component.BlurredTopAppBar
+import com.github.ilife798.ui.component.ConfirmDialog
+import com.github.ilife798.ui.component.PageScrollColumn
+import com.github.ilife798.ui.theme.rememberAppBlurBackdrop
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Card
-import top.yukonga.miuix.kmp.basic.CardDefaults
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.SmallTitle
-import top.yukonga.miuix.kmp.basic.Switch
 import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.basic.TextButton
-import top.yukonga.miuix.kmp.basic.TopAppBar
-import com.github.ilife798.ui.theme.captureForBlur
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Contacts
+import top.yukonga.miuix.kmp.icon.extended.Create
 import top.yukonga.miuix.kmp.icon.extended.Hide
 import top.yukonga.miuix.kmp.icon.extended.Import
+import top.yukonga.miuix.kmp.icon.extended.Notes
 import top.yukonga.miuix.kmp.icon.extended.Remove
 import top.yukonga.miuix.kmp.icon.extended.Show
-import top.yukonga.miuix.kmp.preference.OverlayDropdownPreference
-import top.yukonga.miuix.kmp.shader.isRuntimeShaderSupported
 import top.yukonga.miuix.kmp.theme.MiuixTheme
-import top.yukonga.miuix.kmp.theme.LocalDismissState
-import top.yukonga.miuix.kmp.utils.overScrollVertical
-import top.yukonga.miuix.kmp.utils.scrollEndHaptic
-import top.yukonga.miuix.kmp.window.WindowDialog
-import com.github.ilife798.data.model.ThemeMode
-import com.github.ilife798.data.model.PaletteStyle
-import com.github.ilife798.data.viewmodel.AppViewModel
-import com.github.ilife798.getAppVersion
-import com.github.ilife798.getAppVersionCode
-import com.github.ilife798.showToast
-import com.github.ilife798.util.currentTimeMillis
-import com.github.ilife798.ui.theme.ColorSwatchPreview
-import com.github.ilife798.ui.theme.PresetColors
-import com.github.ilife798.ui.theme.WindowBlurEffect
-import com.github.ilife798.ui.theme.appBarBlur
-import com.github.ilife798.ui.theme.blurAppBarColor
-import com.github.ilife798.ui.theme.rememberAppBlurBackdrop
-import top.yukonga.miuix.kmp.icon.extended.Create
-import top.yukonga.miuix.kmp.icon.extended.Notes
-import top.yukonga.miuix.kmp.preference.ArrowPreference
 
 @Composable
 fun MePage(
@@ -97,33 +61,20 @@ fun MePage(
     onBillClick: () -> Unit = {},
     onLicenseClick: () -> Unit = {},
     bottomPadding: Dp,
-    wideScreen: Boolean
+    wideScreen: Boolean,
 ) {
     val scrollBehavior = MiuixScrollBehavior()
     val blurBackdrop = rememberAppBlurBackdrop(viewModel.state.appBlur)
 
     Scaffold(
-        topBar = {
-            TopAppBar(
-                title = "我的",
-                modifier = Modifier.appBarBlur(blurBackdrop),
-                color = blurAppBarColor(blurBackdrop),
-                scrollBehavior = scrollBehavior
-            )
-        }
+        topBar = { BlurredTopAppBar("我的", blurBackdrop, scrollBehavior) },
     ) { paddingValues ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .captureForBlur(blurBackdrop)
-                .nestedScroll(scrollBehavior.nestedScrollConnection)
-                .scrollEndHaptic()
-                .overScrollVertical()
-                .verticalScroll(rememberScrollState())
-                .padding(paddingValues)
-                .padding(horizontal = 16.dp)
-                .padding(top = 4.dp, bottom = bottomPadding),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+        PageScrollColumn(
+            blurBackdrop = blurBackdrop,
+            scrollBehavior = scrollBehavior,
+            contentPadding = paddingValues,
+            topPadding = 4.dp,
+            bottomPadding = bottomPadding,
         ) {
             AccountSection(viewModel, onLoginClick, onScoreClick, onAccountClick, onBillClick)
             SettingsSection(viewModel, onLicenseClick, wideScreen)
@@ -138,7 +89,7 @@ private fun AccountSection(
     onLoginClick: (isAlipay: Boolean) -> Unit,
     onScoreClick: () -> Unit,
     onAccountClick: () -> Unit,
-    onBillClick: () -> Unit
+    onBillClick: () -> Unit,
 ) {
     val account = viewModel.state.account
     val accountInfo = viewModel.state.accountInfo
@@ -153,34 +104,37 @@ private fun AccountSection(
     SmallTitle(text = "账号", insideMargin = PaddingValues(12.dp, 8.dp))
     Card(modifier = Modifier.fillMaxWidth()) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .then(if (viewModel.developerMode) Modifier.clickable { onAccountClick() } else Modifier)
-                .padding(16.dp),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .then(if (viewModel.developerMode) Modifier.clickable { onAccountClick() } else Modifier)
+                    .padding(16.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             if (accountInfo.img.isNotEmpty()) {
                 AsyncImage(
                     model = accountInfo.img,
                     contentDescription = null,
-                    modifier = Modifier
-                        .size(48.dp)
-                        .clip(CircleShape),
-                    contentScale = ContentScale.Crop
+                    modifier =
+                        Modifier
+                            .size(48.dp)
+                            .clip(CircleShape),
+                    contentScale = ContentScale.Crop,
                 )
             } else {
                 Box(
-                    modifier = Modifier
-                        .size(48.dp)
-                        .clip(CircleShape)
-                        .background(MiuixTheme.colorScheme.secondaryContainer),
-                    contentAlignment = Alignment.Center
+                    modifier =
+                        Modifier
+                            .size(48.dp)
+                            .clip(CircleShape)
+                            .background(MiuixTheme.colorScheme.secondaryContainer),
+                    contentAlignment = Alignment.Center,
                 ) {
                     Icon(
                         imageVector = MiuixIcons.Contacts,
                         contentDescription = null,
-                        tint = MiuixTheme.colorScheme.onSurface
+                        tint = MiuixTheme.colorScheme.onSurface,
                     )
                 }
             }
@@ -188,28 +142,28 @@ private fun AccountSection(
                 Text(
                     text = accountInfo.name.ifEmpty { if (account.isLoggedIn) account.phone else "未登录" },
                     style = MiuixTheme.textStyles.title2,
-                    color = MiuixTheme.colorScheme.onSurface
+                    color = MiuixTheme.colorScheme.onSurface,
                 )
                 if (accountInfo.pn.isNotEmpty()) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
                     ) {
                         Text(
                             text = if (showPhone) accountInfo.pn else maskPhoneMiddle4(accountInfo.pn),
                             style = MiuixTheme.textStyles.body2,
-                            color = MiuixTheme.colorScheme.onSurfaceVariantSummary
+                            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                         )
                         IconButton(
                             minHeight = 24.dp,
                             minWidth = 24.dp,
-                            onClick = { showPhone = !showPhone }
+                            onClick = { showPhone = !showPhone },
                         ) {
                             Icon(
                                 imageVector = if (showPhone) MiuixIcons.Hide else MiuixIcons.Show,
                                 contentDescription = if (showPhone) "隐藏" else "显示",
                                 modifier = Modifier.size(16.dp),
-                                tint = MiuixTheme.colorScheme.onSurfaceVariantSummary
+                                tint = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                             )
                         }
                     }
@@ -220,13 +174,13 @@ private fun AccountSection(
                     minHeight = 35.dp,
                     minWidth = 35.dp,
                     backgroundColor = MiuixTheme.colorScheme.secondaryContainer.copy(alpha = 0.8f),
-                    onClick = { showLogoutDialog = true }
+                    onClick = { showLogoutDialog = true },
                 ) {
                     Icon(
                         imageVector = MiuixIcons.Remove,
                         contentDescription = "退出登录",
                         modifier = Modifier.size(20.dp),
-                        tint = MiuixTheme.colorScheme.onSurface.copy(alpha = if (isSystemInDarkTheme()) 0.7f else 0.9f)
+                        tint = MiuixTheme.colorScheme.onSurface.copy(alpha = if (isSystemInDarkTheme()) 0.7f else 0.9f),
                     )
                 }
             } else {
@@ -234,32 +188,33 @@ private fun AccountSection(
                     minHeight = 35.dp,
                     minWidth = 35.dp,
                     backgroundColor = MiuixTheme.colorScheme.secondaryContainer.copy(alpha = 0.8f),
-                    onClick = { onLoginClick(false) }
+                    onClick = { onLoginClick(false) },
                 ) {
                     Icon(
                         imageVector = MiuixIcons.Import,
                         contentDescription = "登录",
                         modifier = Modifier.size(20.dp),
-                        tint = MiuixTheme.colorScheme.onSurface.copy(alpha = if (isSystemInDarkTheme()) 0.7f else 0.9f)
+                        tint = MiuixTheme.colorScheme.onSurface.copy(alpha = if (isSystemInDarkTheme()) 0.7f else 0.9f),
                     )
                 }
             }
         }
         Column(modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 16.dp)) {
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 12.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(top = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Button(
                     modifier = Modifier.weight(1f),
                     onClick = onBillClick,
-                    colors = ButtonDefaults.buttonColors()
+                    colors = ButtonDefaults.buttonColors(),
                 ) {
                     Icon(
                         imageVector = MiuixIcons.Notes,
-                        contentDescription = "账单"
+                        contentDescription = "账单",
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(text = "我的账单")
@@ -267,11 +222,11 @@ private fun AccountSection(
                 Button(
                     modifier = Modifier.weight(1f),
                     onClick = onScoreClick,
-                    colors = ButtonDefaults.buttonColors()
+                    colors = ButtonDefaults.buttonColors(),
                 ) {
                     Icon(
                         imageVector = MiuixIcons.Create,
-                        contentDescription = "积分"
+                        contentDescription = "积分",
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(text = "积分明细")
@@ -281,337 +236,18 @@ private fun AccountSection(
     }
 
     if (showLogoutDialog) {
-        WindowDialog(
-            show = true,
-            onDismissRequest = { showLogoutDialog = false },
+        ConfirmDialog(
             title = "退出登录",
-            content = {
-                WindowBlurEffect(useBlur = viewModel.state.appBlur)
-                val dismiss = LocalDismissState.current
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(text = "确定要退出登录吗？")
-                    Spacer(modifier = Modifier.height(24.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        TextButton(
-                            modifier = Modifier.weight(1f),
-                            onClick = { dismiss?.invoke() },
-                            text = "取消"
-                        )
-                        TextButton(
-                            modifier = Modifier.weight(1f),
-                            onClick = {
-                                viewModel.logout()
-                                dismiss?.invoke()
-                            },
-                            text = "退出",
-                            colors = ButtonDefaults.textButtonColors(
-                                textColor = MiuixTheme.colorScheme.error
-                            )
-                        )
-                    }
-                }
-            }
+            message = "确定要退出登录吗？",
+            appBlur = viewModel.state.appBlur,
+            confirmText = "退出",
+            destructive = true,
+            onConfirm = {
+                viewModel.logout()
+                showLogoutDialog = false
+            },
+            onDismiss = { showLogoutDialog = false },
         )
-    }
-}
-
-@Composable
-private fun SettingsSection(viewModel: AppViewModel, onLicenseClick: () -> Unit, wideScreen: Boolean) {
-    val state = viewModel.state
-    val uriHandler = LocalUriHandler.current
-    val themeOptions = listOf("跟随系统", "浅色", "深色")
-    var themeSelectedIndex by remember {
-        mutableIntStateOf(
-            when (state.themeMode) {
-                ThemeMode.System -> 0
-                ThemeMode.Light -> 1
-                ThemeMode.Dark -> 2
-            }
-        )
-    }
-    var showDisclaimerDialog by remember { mutableStateOf(false) }
-    var showGithubProxyDialog by remember { mutableStateOf(false) }
-    var versionTapCount by remember { mutableIntStateOf(0) }
-    var lastVersionTapAt by remember { mutableStateOf(0L) }
-
-    SmallTitle(text = "外观设置", insideMargin = PaddingValues(12.dp, 8.dp))
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column {
-            OverlayDropdownPreference(
-                title = "主题模式",
-                items = themeOptions,
-                selectedIndex = themeSelectedIndex,
-                onSelectedIndexChange = { index ->
-                    themeSelectedIndex = index
-                    val mode = when (index) {
-                        0 -> ThemeMode.System
-                        1 -> ThemeMode.Light
-                        else -> ThemeMode.Dark
-                    }
-                    viewModel.setThemeMode(mode)
-                }
-            )
-            if (isRuntimeShaderSupported()) {
-                BasicComponent(
-                    title = "模糊效果",
-                    summary = "为顶栏、底栏、对话框添加模糊效果",
-                    endActions = {
-                        Switch(
-                            checked = state.appBlur,
-                            onCheckedChange = { viewModel.setAppBlur(it) }
-                        )
-                    }
-                )
-            }
-            BasicComponent(
-                title = "预测性返回动画",
-                summary = "返回滑动前提前预览即将跳转至的界面",
-                endActions = {
-                    Switch(
-                        checked = state.predictiveBackEnabled,
-                        onCheckedChange = { viewModel.setPredictiveBackEnabled(it) }
-                    )
-                }
-            )
-            BasicComponent(
-                title = "自定义颜色",
-                summary = "自定义应用主题配色方案",
-                endActions = {
-                    Switch(
-                        checked = state.customColor,
-                        onCheckedChange = { viewModel.setCustomColor(it) }
-                    )
-                }
-            )
-            AnimatedVisibility(
-                visible = state.customColor,
-                enter = fadeIn() + expandVertically(),
-                exit = fadeOut() + shrinkVertically()
-            ) {
-                BasicComponent(
-                    title = "动态取色",
-                    summary = "基于系统壁纸颜色生成配色方案",
-                    endActions = {
-                        Switch(
-                            checked = state.dynamicColor,
-                            onCheckedChange = { viewModel.setDynamicColor(it) }
-                        )
-                    }
-                )
-            }
-            AnimatedVisibility(
-                visible = state.customColor,
-                enter = fadeIn() + expandVertically(),
-                exit = fadeOut() + shrinkVertically()
-            ) {
-                OverlayDropdownPreference(
-                    title = "调色板风格",
-                    items = PaletteStyle.entries.map { it.displayName },
-                    selectedIndex = PaletteStyle.entries.indexOf(state.paletteStyle).coerceAtLeast(0),
-                    onSelectedIndexChange = { index ->
-                        viewModel.setPaletteStyle(PaletteStyle.entries[index])
-                    }
-                )
-            }
-            AnimatedVisibility(
-                visible = state.customColor && !state.dynamicColor,
-                enter = fadeIn() + expandVertically(),
-                exit = fadeOut() + shrinkVertically()
-            ) {
-                PresetColorGrid(
-                    paletteStyle = state.paletteStyle,
-                    selectedSeed = state.seedColor,
-                    onSelect = { viewModel.setSeedColor(it) }
-                )
-            }
-            if (!wideScreen) {
-                BasicComponent(
-                    title = "悬浮底栏",
-                    summary = "切换悬浮式底部导航栏",
-                    endActions = {
-                        Switch(
-                            checked = state.floatingNav,
-                            onCheckedChange = { viewModel.setFloatingNav(it) }
-                        )
-                    }
-                )
-            }
-        }
-    }
-    SmallTitle(text = "更新设置", insideMargin = PaddingValues(12.dp, 8.dp))
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column {
-            ArrowPreference(
-                title = "检查更新",
-                summary = "从 GitHub 检查最新版本",
-                onClick = { viewModel.checkForUpdate() }
-            )
-            BasicComponent(
-                title = "启动时检查更新",
-                summary = "打开应用时自动检查新版本",
-                endActions = {
-                    Switch(
-                        checked = viewModel.checkUpdateOnStart,
-                        onCheckedChange = { viewModel.setCheckUpdateOnStartEnabled(it) }
-                    )
-                }
-            )
-            ArrowPreference(
-                title = "加速地址",
-                summary = viewModel.githubProxyUrl.ifBlank { "设置 GitHub 加速地址" },
-                onClick = { showGithubProxyDialog = true }
-            )
-        }
-    }
-    SmallTitle(text = "关于", insideMargin = PaddingValues(12.dp, 8.dp))
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column {
-            BasicComponent(
-                title = "版本",
-                summary = "${getAppVersion()}(${getAppVersionCode()})",
-                modifier = Modifier.combinedClickable(
-                    onClick = {
-                        val now = currentTimeMillis()
-                        versionTapCount = if (now - lastVersionTapAt > 2000L) 1 else versionTapCount + 1
-                        lastVersionTapAt = now
-                        if (versionTapCount >= 5) {
-                            versionTapCount = 0
-                            if (viewModel.developerMode) {
-                                viewModel.disableDeveloperMode()
-                                showToast("已关闭开发者模式")
-                            } else {
-                                viewModel.enableDeveloperMode()
-                                showToast("已启用开发者模式")
-                            }
-                        }
-                    }
-                )
-            )
-            ArrowPreference(
-                title = "查看源代码",
-                summary = "在 GitHub 上查看源代码",
-                onClick = { uriHandler.openUri("https://github.com/Jursin/ilife798") }
-            )
-            ArrowPreference(
-                title = "开放源代码许可",
-                summary = "查看应用所使用的第三方开源库及其许可证信息",
-                onClick = onLicenseClick
-            )
-            ArrowPreference(
-                title = "免责声明",
-                summary = "查看使用本应用的免责声明",
-                onClick = { showDisclaimerDialog = true }
-            )
-            ArrowPreference(
-                title = "赞助支持",
-                summary = "在爱发电赞助我",
-                onClick = { uriHandler.openUri("https://afdian.com/a/jursin") }
-            )
-        }
-    }
-
-    if (showDisclaimerDialog) {
-        WindowDialog(
-            show = true,
-            onDismissRequest = { showDisclaimerDialog = false },
-            title = "免责声明",
-            content = {
-                WindowBlurEffect(useBlur = state.appBlur)
-                val dismiss = LocalDismissState.current
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(max = 420.dp)
-                ) {
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .weight(1f, fill = false),
-                        colors = CardDefaults.defaultColors(
-                            color = MiuixTheme.colorScheme.surfaceContainerHighest
-                        )
-                    ) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .verticalScroll(rememberScrollState())
-                                .padding(16.dp),
-                            verticalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            disclaimerLines.forEach { line ->
-                                Text(
-                                    text = "• $line",
-                                    style = MiuixTheme.textStyles.body2,
-                                    color = MiuixTheme.colorScheme.onSurfaceContainer
-                                )
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(24.dp))
-
-                    Button(
-                        modifier = Modifier.fillMaxWidth(),
-                        onClick = { dismiss?.invoke() },
-                        colors = ButtonDefaults.buttonColorsPrimary()
-                    ) {
-                        Text(text = "了解")
-                    }
-                }
-            }
-        )
-    }
-
-    UpdateDialogs(
-        viewModel = viewModel,
-        showGithubProxyDialog = showGithubProxyDialog,
-        onDismissGithubProxyDialog = { showGithubProxyDialog = false }
-    )
-}
-
-@Composable
-private fun PresetColorGrid(
-    paletteStyle: PaletteStyle,
-    selectedSeed: Int,
-    onSelect: (Int) -> Unit
-) {
-    BoxWithConstraints(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 4.dp)
-    ) {
-        val columns = (maxWidth / 80.dp).toInt().coerceAtLeast(1)
-        Column(
-            modifier = Modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
-            PresetColors.chunked(columns).forEach { rowItems ->
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.Center
-                ) {
-                    rowItems.forEach { preset ->
-                        Box(
-                            modifier = Modifier.weight(1f),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            ColorSwatchPreview(
-                                preset = preset,
-                                paletteStyle = paletteStyle,
-                                selected = selectedSeed == preset.color.toArgb(),
-                                onClick = { onSelect(preset.color.toArgb()) }
-                            )
-                        }
-                    }
-                    repeat(columns - rowItems.size) {
-                        Spacer(modifier = Modifier.weight(1f))
-                    }
-                }
-            }
-        }
     }
 }
 
@@ -620,11 +256,3 @@ private fun maskPhoneMiddle4(phone: String): String {
     val start = (phone.length - 4) / 2
     return phone.substring(0, start) + "****" + phone.substring(start + 4)
 }
-
-private val disclaimerLines = listOf(
-    "本项目非官方项目，与慧生活798服务提供方无任何联系。",
-    "本项目仅供学习和研究使用，不用于商业目的。",
-    "请在本应用上仅使用本人有权访问的账户和设备，并遵守相关服务协议。",
-    "你应了解自动运行积分任务存在被官方标记、拉黑甚至追究的风险，因使用本应用造成严重后果的由使用者自行承担，本项目概不负责。",
-    "你应了解官方可能会变更接口或相关认证方式，本项目不保证持续可用性，不一定及时通知或修复。"
-)

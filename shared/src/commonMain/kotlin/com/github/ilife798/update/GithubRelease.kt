@@ -9,12 +9,12 @@ data class GithubAsset(
     val size: Long = 0,
     val digest: String? = null,
     @SerialName("browser_download_url")
-    val browserDownloadUrl: String = ""
+    val browserDownloadUrl: String = "",
 )
 
 @Serializable
 data class GithubRelease(
     @SerialName("tag_name")
     val tagName: String = "",
-    val assets: List<GithubAsset> = emptyList()
+    val assets: List<GithubAsset> = emptyList(),
 )

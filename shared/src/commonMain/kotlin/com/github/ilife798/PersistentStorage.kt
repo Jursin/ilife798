@@ -1,13 +1,34 @@
 package com.github.ilife798
 
 expect class PersistentStorage {
-    fun saveString(key: String, value: String)
+    fun saveString(
+        key: String,
+        value: String,
+    )
+
     fun getString(key: String): String?
-    fun saveBoolean(key: String, value: Boolean)
+
+    fun saveBoolean(
+        key: String,
+        value: Boolean,
+    )
+
     fun getBoolean(key: String): Boolean
-    fun getBoolean(key: String, defaultValue: Boolean): Boolean
-    fun saveInt(key: String, value: Int)
-    fun getInt(key: String, defaultValue: Int): Int
+
+    fun getBoolean(
+        key: String,
+        defaultValue: Boolean,
+    ): Boolean
+
+    fun saveInt(
+        key: String,
+        value: Int,
+    )
+
+    fun getInt(
+        key: String,
+        defaultValue: Int,
+    ): Int
 }
 
 object StorageKeys {

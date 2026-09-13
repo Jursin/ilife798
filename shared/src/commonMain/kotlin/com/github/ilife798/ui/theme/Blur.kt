@@ -8,15 +8,13 @@ import top.yukonga.miuix.kmp.blur.BlendColorEntry
 import top.yukonga.miuix.kmp.blur.BlurColors
 import top.yukonga.miuix.kmp.blur.LayerBackdrop
 import top.yukonga.miuix.kmp.blur.layerBackdrop
-import top.yukonga.miuix.kmp.blur.textureBlur
 import top.yukonga.miuix.kmp.blur.rememberLayerBackdrop
+import top.yukonga.miuix.kmp.blur.textureBlur
 import top.yukonga.miuix.kmp.shader.isRuntimeShaderSupported
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
-/**
- * Remember a [LayerBackdrop] that captures the content drawn with [Modifier.layerBackdrop].
- * Returns null when blur is disabled or the platform doesn't support runtime shaders.
- */
+// 记住一个 [LayerBackdrop]，用于捕获 [Modifier.layerBackdrop] 绘制的内容。
+// 模糊关闭或平台不支持运行时着色器时返回 null。
 @Composable
 fun rememberAppBlurBackdrop(enabled: Boolean): LayerBackdrop? {
     if (!enabled || !isRuntimeShaderSupported()) return null
@@ -27,27 +25,30 @@ fun rememberAppBlurBackdrop(enabled: Boolean): LayerBackdrop? {
     }
 }
 
-/** Transparent when blur is active so the backdrop shows through, otherwise the surface color. */
+// 模糊生效时返回透明色让背景透出，否则返回表面色。
 @Composable
-fun blurAppBarColor(backdrop: LayerBackdrop?): Color =
-    if (backdrop != null) Color.Transparent else MiuixTheme.colorScheme.surface
+fun blurAppBarColor(backdrop: LayerBackdrop?): Color = if (backdrop != null) Color.Transparent else MiuixTheme.colorScheme.surface
 
-/** Captures this composable's content into [backdrop] so bars can blur it. No-op when null. */
-fun Modifier.captureForBlur(backdrop: LayerBackdrop?): Modifier =
-    if (backdrop != null) this.layerBackdrop(backdrop) else this
+// 把内容捕获到 [backdrop]，供标题栏模糊使用；为 null 时不处理。
+fun Modifier.captureForBlur(backdrop: LayerBackdrop?): Modifier = if (backdrop != null) this.layerBackdrop(backdrop) else this
 
-/** Applies the frosted-glass blur to a bar, using [backdrop] as its source. */
+// 以 [backdrop] 为源，给标题栏加上毛玻璃模糊。
 @Composable
-fun Modifier.appBarBlur(backdrop: LayerBackdrop?, blurRadius: Float = 25f): Modifier {
+fun Modifier.appBarBlur(
+    backdrop: LayerBackdrop?,
+    blurRadius: Float = 25f,
+): Modifier {
     if (backdrop == null) return this
     return this.textureBlur(
         backdrop = backdrop,
         shape = RectangleShape,
         blurRadius = blurRadius,
-        colors = BlurColors(
-            blendColors = listOf(
-                BlendColorEntry(MiuixTheme.colorScheme.surface.copy(alpha = 0.8f))
-            )
-        ),
+        colors =
+            BlurColors(
+                blendColors =
+                    listOf(
+                        BlendColorEntry(MiuixTheme.colorScheme.surface.copy(alpha = 0.8f)),
+                    ),
+            ),
     )
 }

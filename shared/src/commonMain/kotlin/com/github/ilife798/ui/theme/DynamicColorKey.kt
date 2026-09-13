@@ -3,10 +3,7 @@ package com.github.ilife798.ui.theme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 
-/**
- * Returns the system accent color used as the seed for dynamic color schemes,
- * or null when the platform does not provide one (falls back to Miuix's own
- * platform dynamic colors).
- */
+// 返回系统主题色，作为动态取色的种子色；
+// 平台未提供时返回 null，回退到 Miuix 自带的平台动态色。
 @Composable
 expect fun systemDynamicColorKey(): Color?

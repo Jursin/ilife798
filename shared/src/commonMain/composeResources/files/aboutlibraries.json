@@ -2616,28 +2616,6 @@
             ]
         },
         {
-            "uniqueId": "io.ktor:ktor-client-darwin",
-            "artifactVersion": "3.5.2",
-            "name": "ktor-client-darwin",
-            "description": "Ktor is a framework for quickly creating web applications in Kotlin with minimal effort.",
-            "website": "https://github.com/ktorio/ktor",
-            "developers": [
-                {
-                    "name": "Jetbrains Team",
-                    "organisationUrl": "https://www.jetbrains.com"
-                }
-            ],
-            "scm": {
-                "url": "https://github.com/ktorio/ktor.git"
-            },
-            "licenses": [
-                "Apache-2.0"
-            ],
-            "funding": [
-                
-            ]
-        },
-        {
             "uniqueId": "io.ktor:ktor-client-okhttp",
             "artifactVersion": "3.5.2",
             "name": "ktor-client-okhttp",
@@ -2751,28 +2729,6 @@
             "uniqueId": "io.ktor:ktor-network",
             "artifactVersion": "3.5.2",
             "name": "ktor-network",
-            "description": "Ktor is a framework for quickly creating web applications in Kotlin with minimal effort.",
-            "website": "https://github.com/ktorio/ktor",
-            "developers": [
-                {
-                    "name": "Jetbrains Team",
-                    "organisationUrl": "https://www.jetbrains.com"
-                }
-            ],
-            "scm": {
-                "url": "https://github.com/ktorio/ktor.git"
-            },
-            "licenses": [
-                "Apache-2.0"
-            ],
-            "funding": [
-                
-            ]
-        },
-        {
-            "uniqueId": "io.ktor:ktor-network-tls",
-            "artifactVersion": "3.5.2",
-            "name": "ktor-network-tls",
             "description": "Ktor is a framework for quickly creating web applications in Kotlin with minimal effort.",
             "website": "https://github.com/ktorio/ktor",
             "developers": [

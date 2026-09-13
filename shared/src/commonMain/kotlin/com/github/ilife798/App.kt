@@ -16,7 +16,7 @@ fun App() {
         customColor = state.customColor,
         dynamicColor = state.dynamicColor,
         paletteStyle = state.paletteStyle,
-        seedColor = Color(state.seedColor)
+        seedColor = Color(state.seedColor),
     ) {
         MainScaffold(viewModel = viewModel)
     }

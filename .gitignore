@@ -16,7 +16,6 @@ output.json
 # Local configuration & signing
 local.properties
 secrets.properties
-iosApp/Configuration/Secrets.xcconfig
 *.jks
 *.keystore
 
@@ -26,20 +25,9 @@ iosApp/Configuration/Secrets.xcconfig
 .navigation/
 
 # Xcode / iOS
+DerivedData/
 xcuserdata/
 *.xcuserstate
-DerivedData/
-*.xccheckout
-*.moved-aside
-*.xcscmblueprint
-*.xcodeproj/*
-!*.xcodeproj/project.pbxproj
-!*.xcodeproj/xcshareddata/
-!*.xcodeproj/project.xcworkspace/*
-*.xcworkspace/*
-!*.xcworkspace/contents.xcworkspacedata
-
-# CocoaPods
 Pods/
 Podfile.lock
 

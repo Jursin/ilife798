@@ -50,21 +50,23 @@
 
 - Android Debug: `./gradlew :androidApp:assembleDebug`
 - Android Release: `./gradlew :androidApp:assembleRelease`
-- iOS app: 用 Xcode 打开 [/iosApp](./iosApp) 目录运行
 
 ## 🛠️ 运行测试
 
 - Android tests: `./gradlew :shared:testAndroidHostTest`
-- iOS tests: `./gradlew :shared:iosSimulatorArm64Test`
+
+## 🎨 代码格式
+
+- 检查格式：`./gradlew spotlessCheck`
+- 自动格式化：`./gradlew spotlessApply`
 
 ## 🔑 敏感数据配置
 
 - Android 参数配置：复制 `secrets.properties.example` 为 `secrets.properties`
 - Android 签名配置：复制 `local.properties.example` 为 `local.properties`
-- iOS 参数配置：复制 `iosApp/Configuration/Secrets.xcconfig.example` 为 `iosApp/Configuration/Secrets.xcconfig`
 
 ## 📚 开放源代码许可
-[本项目所使用的第三方开源库及其许可证信息](shared\src\commonMain\composeResources\files\aboutlibraries.json)
+[本项目所使用的第三方开源库及其许可证信息](shared/src/commonMain/composeResources/files/aboutlibraries.json)
 
 ## 📜 许可证
 

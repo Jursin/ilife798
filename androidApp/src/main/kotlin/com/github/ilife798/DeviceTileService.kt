@@ -7,12 +7,9 @@ import android.os.Build
 import android.service.quicksettings.Tile
 import android.service.quicksettings.TileService
 
-/**
- * 设备快捷设置图块。点击后启动 MainActivity 并携带设备编号，
- * 由 UI 回到首页并触发对应设备的启动按钮流程。
- */
+// 设备快捷设置图块。点击后启动 MainActivity 并携带设备编号，
+// 由 UI 回到首页并触发对应设备的启动按钮流程。
 class DeviceTileService : TileService() {
-
     override fun onTileAdded() {
         super.onTileAdded()
         DeviceTilePrefs.setTileAdded(this, true)
@@ -44,20 +41,22 @@ class DeviceTileService : TileService() {
     }
 
     private fun launchApp(deviceId: String?) {
-        val intent = Intent(this, MainActivity::class.java).apply {
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
-            if (!deviceId.isNullOrEmpty()) {
-                action = ACTION_START_DEVICE
-                putExtra(EXTRA_DEVICE_ID, deviceId)
+        val intent =
+            Intent(this, MainActivity::class.java).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                if (!deviceId.isNullOrEmpty()) {
+                    action = IntentActions.ACTION_START_DEVICE
+                    putExtra(IntentActions.EXTRA_DEVICE_ID, deviceId)
+                }
             }
-        }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            val pending = PendingIntent.getActivity(
-                this,
-                0,
-                intent,
-                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-            )
+            val pending =
+                PendingIntent.getActivity(
+                    this,
+                    0,
+                    intent,
+                    PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+                )
             startActivityAndCollapse(pending)
         } else {
             // API 34 以下无 PendingIntent 重载，只能使用该已废弃方法
