@@ -42,6 +42,4 @@ node_modules/
 *.rej
 .env
 
-# Local-only docs
 AGENTS.md
-docs/

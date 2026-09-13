@@ -303,38 +303,21 @@ class WalletBillController(
                 val monthPrefix = currentTimeFormatted("yyyy-MM")
                 val todayKey = currentTimeFormatted("yyyy-MM-dd")
                 val yesterdayKey = formatTimestamp(getTodayStart(now) - 86_400_000L, "yyyy-MM-dd")
-                var today = 0.0
-                var yesterday = 0.0
-                val monthDaySums = mutableMapOf<String, Double>()
+                val accumulator = SpendingAccumulator(todayKey, yesterdayKey, monthPrefix)
                 var page = 0
                 while (page < SPENDING_MAX_PAGES) {
                     val result = api.getBillList(token, page = page, size = BILL_PAGE_SIZE, status = BILL_STATUS)
                     if (currentToken() != token) return@launch
                     if (result.records.isEmpty()) break
                     for (record in result.records) {
-                        if (record.dir != 1 || record.payment <= 0.0 || record.cata == 1) continue
-                        val key = formatTimestamp(record.time, "yyyy-MM-dd")
-                        when (key) {
-                            todayKey -> today += record.payment
-                            yesterdayKey -> yesterday += record.payment
-                        }
-                        if (key.startsWith(monthPrefix)) {
-                            monthDaySums[key] = (monthDaySums[key] ?: 0.0) + record.payment
-                        }
+                        accumulator.add(record, formatTimestamp(record.time, "yyyy-MM-dd"))
                     }
                     val oldest = result.records.minOfOrNull { it.time } ?: break
                     if (formatTimestamp(oldest, "yyyy-MM") < monthPrefix) break
                     if (result.records.size < BILL_PAGE_SIZE) break
                     page++
                 }
-                val spendingDays = monthDaySums.count { it.value > 0.0 }
-                val monthTotal = monthDaySums.values.sum()
-                spendingStats =
-                    SpendingStats(
-                        today = today,
-                        yesterday = yesterday,
-                        monthAverage = if (spendingDays > 0) monthTotal / spendingDays else 0.0,
-                    )
+                spendingStats = accumulator.build()
             } catch (e: Exception) {
                 onLogError("loadSpendingStats", e)
             }

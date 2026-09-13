@@ -1,0 +1,76 @@
+package com.github.ilife798.data.api
+
+import kotlinx.serialization.json.Json
+import kotlin.test.Test
+import kotlin.test.assertEquals
+
+// 请求体默认值与 JSON 契约（对齐 IlifeApi.requestJson 的 encodeDefaults = true）
+class ApiRequestsTest {
+    private val json = Json { encodeDefaults = true }
+
+    @Test
+    fun missionExecDefaultType() {
+        val request = MissionExecRequest(adId = "ad1")
+        assertEquals(101, request.type)
+        assertEquals(
+            """{"adId":"ad1","type":101}""",
+            json.encodeToString(MissionExecRequest.serializer(), request),
+        )
+    }
+
+    @Test
+    fun refundWalletDefaultType() {
+        val request = RefundWalletRequest(eid = "e1")
+        assertEquals(23, request.type)
+        assertEquals(
+            """{"eid":"e1","type":23}""",
+            json.encodeToString(RefundWalletRequest.serializer(), request),
+        )
+    }
+
+    @Test
+    fun exchangeScoreDefaultType() {
+        val request = ExchangeScoreRequest(ep = EndpointRef("ep1"), score = 500)
+        assertEquals(1, request.type)
+        assertEquals(
+            """{"ep":{"id":"ep1"},"score":500,"type":1}""",
+            json.encodeToString(ExchangeScoreRequest.serializer(), request),
+        )
+    }
+
+    @Test
+    fun createRechargeOrderDefaults() {
+        val request =
+            CreateRechargeOrderRequest(
+                contact = EndpointRef("c"),
+                ep = EndpointRef("e"),
+                owner = EndpointRef("o"),
+                prds = listOf(ProductRef(id = "p", count = 2)),
+            )
+        assertEquals(1, request.cata)
+        assertEquals("钱包充值", request.note)
+        assertEquals(
+            """{"cata":1,"contact":{"id":"c"},"ep":{"id":"e"},"note":"钱包充值","owner":{"id":"o"},"prds":[{"id":"p","count":2}]}""",
+            json.encodeToString(CreateRechargeOrderRequest.serializer(), request),
+        )
+    }
+
+    @Test
+    fun loginAndSignInFields() {
+        assertEquals(
+            """{"openCode":"","authCode":"a","un":"u","cid":"c"}""",
+            json.encodeToString(
+                LoginRequest.serializer(),
+                LoginRequest(authCode = "a", un = "u", cid = "c"),
+            ),
+        )
+        assertEquals(
+            """{"weekDay":2,"adId":"ad"}""",
+            json.encodeToString(SignInRequest.serializer(), SignInRequest(weekDay = 2, adId = "ad")),
+        )
+        assertEquals(
+            """{"un":"u","authCode":"a","s":"s"}""",
+            json.encodeToString(SmsCodeRequest.serializer(), SmsCodeRequest(un = "u", authCode = "a", s = "s")),
+        )
+    }
+}

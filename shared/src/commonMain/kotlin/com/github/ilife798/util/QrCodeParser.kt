@@ -29,6 +29,7 @@ object QrCodeParser {
             val deviceId = text.substringAfterLast("/").trim()
             return if (deviceId.isEmpty()) Result() else Result(deviceId = deviceId)
         }
-        return Result(qrId = text)
+        // 未知内容视为无效二维码
+        return Result()
     }
 }

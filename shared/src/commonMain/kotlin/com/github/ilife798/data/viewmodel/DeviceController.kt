@@ -37,10 +37,6 @@ private const val DEVICE_MONITOR_INTERVAL_SECONDS = 5L
 // 无模式/多通道的设备类型（水表/淋浴/直饮水），启动时无需拉取可选项
 private val SIMPLE_DEVICE_TYPES = setOf(5, 6, 8)
 
-// 二维码类型
-private const val QR_TYPE_DEVICE = 3
-private const val QR_TYPE_DOOR_LOCK = 8
-
 // 设备列表、启停与扫码解析。
 class DeviceController(
     private val scope: CoroutineScope,
@@ -233,18 +229,25 @@ class DeviceController(
             return null
         }
         return try {
-            val result = api.qrUse(token, qrId)
-            if (!result.success) return null
-            if (result.type != QR_TYPE_DEVICE && result.type != QR_TYPE_DOOR_LOCK) {
-                onToast("暂不支持该类型二维码")
-                return null
+            when (val outcome = resolveQrUseResult(api.qrUse(token, qrId))) {
+                is QrResolveOutcome.Device -> {
+                    outcome.deviceId
+                }
+
+                QrResolveOutcome.UnsupportedType -> {
+                    onToast("暂不支持该类型二维码")
+                    null
+                }
+
+                QrResolveOutcome.MissingDevice -> {
+                    onToast("二维码中不包含设备信息")
+                    null
+                }
+
+                QrResolveOutcome.Failed -> {
+                    null
+                }
             }
-            val deviceId = result.deviceId
-            if (deviceId.isEmpty()) {
-                onToast("二维码中不包含设备信息")
-                return null
-            }
-            deviceId
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
