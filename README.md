@@ -10,7 +10,7 @@
 [![](https://img.shields.io/badge/爱发电-赞助我-946CE6?logo=afdian)](https://afdian.com/a/jursin)
 
 
-第三方慧生活798客户端，使用 Miuix UI 库。
+慧生活798第三方客户端，使用 Miuix UI 库。
 
 ## 🖼️ 截图
 
