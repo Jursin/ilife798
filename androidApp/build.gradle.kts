@@ -1,3 +1,4 @@
+@file:Suppress("UnstableApiUsage")
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import java.util.Properties
 
@@ -56,6 +57,9 @@ android {
         buildConfigField("String", "API_GATEWAY", "\"${secretsProps.getProperty("API_GATEWAY", "")}\"")
         buildConfigField("String", "SIGN_SALT", "\"${secretsProps.getProperty("SIGN_SALT", "")}\"")
         buildConfigField("String", "API_CID", "\"${secretsProps.getProperty("API_CID", "")}\"")
+    }
+    androidResources {
+        localeFilters += listOf("zh")
     }
     packaging {
         resources {

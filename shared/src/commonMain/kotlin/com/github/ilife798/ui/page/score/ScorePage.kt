@@ -9,12 +9,15 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -231,12 +234,8 @@ fun ScorePage(
     }
 
     exchangeUnitScore?.let { unitScore ->
-        val wallet =
-            state.wallets.firstOrNull { it.id == state.activeWalletId }
-                ?: state.wallets.firstOrNull()
         ScoreExchangeDialog(
             unitScore = unitScore,
-            walletName = wallet?.name?.ifEmpty { "钱包" } ?: "钱包",
             available = state.points.available ?: 0,
             appBlur = state.appBlur,
             dynamicColor = state.dynamicColor,
@@ -345,7 +344,6 @@ private fun ScoreExchangeCard(
 @Composable
 private fun ScoreExchangeDialog(
     unitScore: Int,
-    walletName: String,
     available: Int,
     appBlur: Boolean,
     dynamicColor: Boolean,
@@ -368,55 +366,38 @@ private fun ScoreExchangeDialog(
         onConfirm = { total?.let(onConfirm) },
         onDismiss = onDismiss,
     ) {
-        Text(
-            text = "兑换到：$walletName",
-            style = MiuixTheme.textStyles.subtitle,
-            color = MiuixTheme.colorScheme.onSurface,
-        )
-        Text(
-            text = "每份 $unitScore 积分 = ¥${formatMoney(unitScore / 1000.0)}",
-            style = MiuixTheme.textStyles.body2,
-            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-            modifier = Modifier.padding(top = 4.dp),
-        )
-        Spacer(modifier = Modifier.height(12.dp))
         Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.fillMaxWidth().height(56.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             TextButton(
+                text = "−",
                 onClick = { quantityText = ((quantity ?: 1) - 1).coerceAtLeast(1).toString() },
                 enabled = !submitting && quantity != null && quantity > 1,
-                text = "−",
+                modifier = Modifier.width(56.dp).fillMaxHeight(),
+                minWidth = 0.dp,
+                minHeight = 0.dp,
+                insideMargin = PaddingValues(0.dp),
+                textStyle = MiuixTheme.textStyles.title1,
             )
             TextField(
                 value = quantityText,
                 onValueChange = { quantityText = it.filter { c -> c.isDigit() }.take(6) },
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.width(104.dp).fillMaxHeight(),
                 label = "份数",
             )
             TextButton(
+                text = "＋",
                 onClick = { quantityText = ((quantity ?: 0) + 1).coerceAtMost(maxQuantity).toString() },
                 enabled = !submitting && quantity != null && quantity < maxQuantity,
-                text = "＋",
+                modifier = Modifier.width(56.dp).fillMaxHeight(),
+                minWidth = 0.dp,
+                minHeight = 0.dp,
+                insideMargin = PaddingValues(0.dp),
+                textStyle = MiuixTheme.textStyles.title1,
             )
         }
-        Text(
-            text = "可用积分：$available，最多 $maxQuantity 份",
-            style = MiuixTheme.textStyles.body2,
-            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-            modifier = Modifier.padding(top = 8.dp),
-        )
-        Text(
-            text =
-                total?.let { "合计消耗 $it 积分，兑换 ¥${formatMoney(it / 1000.0)}" }
-                    ?: "请输入 1～$maxQuantity 之间的整数份数",
-            style = MiuixTheme.textStyles.subtitle,
-            fontWeight = FontWeight.Medium,
-            color = MiuixTheme.colorScheme.onSurface,
-            modifier = Modifier.padding(top = 4.dp),
-        )
     }
 }
 
