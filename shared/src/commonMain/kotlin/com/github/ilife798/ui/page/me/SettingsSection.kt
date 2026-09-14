@@ -37,7 +37,6 @@ import com.github.ilife798.ui.component.DisclaimerDialog
 import com.github.ilife798.ui.component.SwitchPreference
 import com.github.ilife798.ui.theme.ColorSwatchPreview
 import com.github.ilife798.ui.theme.PresetColors
-import com.github.ilife798.util.SPONSOR_URL
 import com.github.ilife798.util.currentTimeMillis
 import top.yukonga.miuix.kmp.basic.BasicComponent
 import top.yukonga.miuix.kmp.basic.Card
@@ -218,7 +217,7 @@ internal fun SettingsSection(
             ArrowPreference(
                 title = "赞助支持",
                 summary = "在爱发电赞助我",
-                onClick = { uriHandler.openUri(SPONSOR_URL) },
+                onClick = { viewModel.openSponsor() },
             )
         }
     }
