@@ -11,6 +11,9 @@ enum class DeviceTileResult {
     // 系统不支持自动添加（Android 13 以下），需用户手动添加
     UNSUPPORTED,
 
+    // 用户在系统弹窗中手动取消了添加
+    CANCELLED,
+
     // 请求失败
     FAILED,
 }

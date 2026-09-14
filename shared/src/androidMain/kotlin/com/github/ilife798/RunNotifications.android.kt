@@ -48,17 +48,34 @@ actual object RunNotifications {
             deviceStates.remove(deviceId)
             cancelNotification(deviceNotificationId(deviceId))
         }
+        syncForeground()
     }
 
     actual fun updateTask(gained: Int) {
         ensureInitialized()
         taskGained = gained.coerceAtLeast(0)
         renderTask()
+        syncForeground()
     }
 
     actual fun removeTask() {
         taskGained = null
         cancelNotification(TASK_NOTIFICATION_ID)
+        syncForeground()
+    }
+
+    // 依据当前运行状态启动/更新/停止前台服务，保证后台与锁屏期间不被冻结。
+    private fun syncForeground() {
+        val summary =
+            buildList {
+                taskGained?.let { add("积分任务运行中 · 已获得 $it 积分") }
+                if (deviceStates.isNotEmpty()) add("${deviceStates.size} 台设备运行中")
+            }.joinToString(" · ").ifEmpty { "后台运行中" }
+        RunForegroundService.refresh(
+            context = ApplicationContext.instance,
+            active = deviceStates.isNotEmpty() || taskGained != null,
+            summary = summary,
+        )
     }
 
     private fun registerLifecycle() {

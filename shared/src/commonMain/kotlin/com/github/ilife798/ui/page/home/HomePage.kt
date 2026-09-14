@@ -428,6 +428,7 @@ private fun DeviceCard(
                                 DeviceTileResult.ADDED -> "已添加设备快捷设置图块"
                                 DeviceTileResult.ALREADY_ADDED -> "图块已存在，已更新为当前设备"
                                 DeviceTileResult.UNSUPPORTED -> "请在快捷设置面板中手动添加图块"
+                                DeviceTileResult.CANCELLED -> "已取消添加图块"
                                 DeviceTileResult.FAILED -> "创建失败"
                             },
                         )

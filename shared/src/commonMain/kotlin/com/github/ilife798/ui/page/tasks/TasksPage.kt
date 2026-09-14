@@ -21,6 +21,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.github.ilife798.AppLifecycle
 import com.github.ilife798.copyToClipboard
 import com.github.ilife798.data.viewmodel.AppViewModel
 import com.github.ilife798.ui.component.AppPullToRefresh
@@ -32,6 +33,8 @@ import com.github.ilife798.ui.component.PageScrollColumn
 import com.github.ilife798.ui.component.SectionHeader
 import com.github.ilife798.ui.theme.rememberAppBlurBackdrop
 import com.github.ilife798.util.getDayOfWeek
+import com.github.ilife798.util.isIgnoringBatteryOptimizations
+import com.github.ilife798.util.openBatteryOptimizationSettings
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Card
@@ -58,6 +61,12 @@ fun TasksPage(
     val blurBackdrop = rememberAppBlurBackdrop(state.appBlur)
     val isLoggedIn = state.account.hasAnyToken
     var showStopDialog by remember { mutableStateOf(false) }
+
+    // 已忽略电池优化（设为「无限制」）后不再展示提示卡片；从系统设置返回时重新检查
+    var batteryUnrestricted by remember { mutableStateOf(isIgnoringBatteryOptimizations()) }
+    LaunchedEffect(AppLifecycle.resumeCount) {
+        batteryUnrestricted = isIgnoringBatteryOptimizations()
+    }
 
     LaunchedEffect(missions) {
         if (missions.isNotEmpty() && !viewModel.isLoading && !state.taskCompleted) {
@@ -246,6 +255,28 @@ fun TasksPage(
                                 )
                             }
                         }
+                    }
+                }
+
+                if (!batteryUnrestricted) {
+                    Card(
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .clickable { openBatteryOptimizationSettings() },
+                        colors =
+                            CardDefaults.defaultColors(
+                                color = MiuixTheme.colorScheme.primaryContainer.copy(alpha = 0.25f),
+                                contentColor = MiuixTheme.colorScheme.onSurface,
+                            ),
+                    ) {
+                        Text(
+                            text = "为保证切到后台或锁屏后任务仍能稳定运行，请允许本应用忽略电池优化。",
+                            style = MiuixTheme.textStyles.body2,
+                            color = MiuixTheme.colorScheme.primary,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.padding(16.dp),
+                        )
                     }
                 }
             }

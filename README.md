@@ -8,7 +8,7 @@
 ![](https://img.shields.io/github/license/Jursin/ilife798?logo=github)
 ![](https://img.shields.io/github/v/release/Jursin/ilife798?include_prereleases&logo=github)
 [![](https://img.shields.io/badge/爱发电-赞助我-946CE6?logo=afdian)](https://afdian.com/a/jursin)
-
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/Jursin/ilife798)
 
 慧生活798第三方客户端，使用 Miuix UI 库。
 

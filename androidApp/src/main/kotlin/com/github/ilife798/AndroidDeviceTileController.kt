@@ -49,6 +49,11 @@ class AndroidDeviceTileController(
                             DeviceTileResult.ALREADY_ADDED
                         }
 
+                        StatusBarManager.TILE_ADD_REQUEST_RESULT_TILE_NOT_ADDED -> {
+                            // 用户在系统弹窗中手动取消
+                            DeviceTileResult.CANCELLED
+                        }
+
                         else -> {
                             DeviceTileResult.FAILED
                         }
