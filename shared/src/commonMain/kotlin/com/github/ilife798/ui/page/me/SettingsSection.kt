@@ -14,14 +14,11 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -36,24 +33,18 @@ import com.github.ilife798.data.viewmodel.AppViewModel
 import com.github.ilife798.getAppVersion
 import com.github.ilife798.getAppVersionCode
 import com.github.ilife798.showToast
+import com.github.ilife798.ui.component.DisclaimerDialog
 import com.github.ilife798.ui.component.SwitchPreference
 import com.github.ilife798.ui.theme.ColorSwatchPreview
 import com.github.ilife798.ui.theme.PresetColors
-import com.github.ilife798.ui.theme.WindowBlurEffect
+import com.github.ilife798.util.SPONSOR_URL
 import com.github.ilife798.util.currentTimeMillis
 import top.yukonga.miuix.kmp.basic.BasicComponent
-import top.yukonga.miuix.kmp.basic.Button
-import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Card
-import top.yukonga.miuix.kmp.basic.CardDefaults
 import top.yukonga.miuix.kmp.basic.SmallTitle
-import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.preference.ArrowPreference
 import top.yukonga.miuix.kmp.preference.OverlayDropdownPreference
 import top.yukonga.miuix.kmp.shader.isRuntimeShaderSupported
-import top.yukonga.miuix.kmp.theme.LocalDismissState
-import top.yukonga.miuix.kmp.theme.MiuixTheme
-import top.yukonga.miuix.kmp.window.WindowDialog
 
 @Composable
 internal fun SettingsSection(
@@ -76,7 +67,7 @@ internal fun SettingsSection(
     var showDisclaimerDialog by remember { mutableStateOf(false) }
     var showGithubProxyDialog by remember { mutableStateOf(false) }
     var versionTapCount by remember { mutableIntStateOf(0) }
-    var lastVersionTapAt by remember { mutableStateOf(0L) }
+    var lastVersionTapAt by remember { mutableLongStateOf(0L) }
 
     SmallTitle(text = "外观设置", insideMargin = PaddingValues(12.dp, 8.dp))
     Card(modifier = Modifier.fillMaxWidth()) {
@@ -227,64 +218,15 @@ internal fun SettingsSection(
             ArrowPreference(
                 title = "赞助支持",
                 summary = "在爱发电赞助我",
-                onClick = { uriHandler.openUri("https://afdian.com/a/jursin") },
+                onClick = { uriHandler.openUri(SPONSOR_URL) },
             )
         }
     }
 
     if (showDisclaimerDialog) {
-        WindowDialog(
-            show = true,
-            onDismissRequest = { showDisclaimerDialog = false },
-            title = "免责声明",
-            content = {
-                WindowBlurEffect(useBlur = state.appBlur)
-                val dismiss = LocalDismissState.current
-                Column(
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .heightIn(max = 420.dp),
-                ) {
-                    Card(
-                        modifier =
-                            Modifier
-                                .fillMaxWidth()
-                                .weight(1f, fill = false),
-                        colors =
-                            CardDefaults.defaultColors(
-                                color = MiuixTheme.colorScheme.surfaceContainerHighest,
-                            ),
-                    ) {
-                        Column(
-                            modifier =
-                                Modifier
-                                    .fillMaxWidth()
-                                    .verticalScroll(rememberScrollState())
-                                    .padding(16.dp),
-                            verticalArrangement = Arrangement.spacedBy(10.dp),
-                        ) {
-                            disclaimerLines.forEach { line ->
-                                Text(
-                                    text = "• $line",
-                                    style = MiuixTheme.textStyles.body2,
-                                    color = MiuixTheme.colorScheme.onSurfaceContainer,
-                                )
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(24.dp))
-
-                    Button(
-                        modifier = Modifier.fillMaxWidth(),
-                        onClick = { dismiss?.invoke() },
-                        colors = ButtonDefaults.buttonColorsPrimary(),
-                    ) {
-                        Text(text = "了解")
-                    }
-                }
-            },
+        DisclaimerDialog(
+            appBlur = state.appBlur,
+            onDismiss = { showDisclaimerDialog = false },
         )
     }
 
@@ -338,12 +280,3 @@ private fun PresetColorGrid(
         }
     }
 }
-
-private val disclaimerLines =
-    listOf(
-        "本项目非官方项目，与慧生活798服务提供方无任何联系。",
-        "本项目仅供学习和研究使用，不用于商业目的。",
-        "请在本应用上仅使用本人有权访问的账户和设备，并遵守相关服务协议。",
-        "你应了解自动运行积分任务存在被官方标记、拉黑甚至追究的风险，因使用本应用造成严重后果的由使用者自行承担，本项目概不负责。",
-        "你应了解官方可能会变更接口或相关认证方式，本项目不保证持续可用性，不一定及时通知或修复。",
-    )

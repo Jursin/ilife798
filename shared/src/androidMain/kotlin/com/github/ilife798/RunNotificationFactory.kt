@@ -45,12 +45,10 @@ internal fun buildDeviceNotification(
                     deviceId = null,
                 ),
             ).setCategory(Notification.CATEGORY_PROGRESS)
-            .setVisibility(Notification.VISIBILITY_PRIVATE)
             .setGroup(RUN_NOTIFICATION_GROUP)
             .setOnlyAlertOnce(true)
             .setShowWhen(false)
             .setOngoing(true)
-            .setAutoCancel(false)
     builder.addAction(stopDeviceAction(context, deviceId))
     applyRunProgress(builder)
     return builder.build()
@@ -81,7 +79,6 @@ internal fun buildTaskNotification(
                     deviceId = null,
                 ),
             ).setCategory(Notification.CATEGORY_PROGRESS)
-            .setVisibility(Notification.VISIBILITY_PRIVATE)
             .setGroup(RUN_NOTIFICATION_GROUP)
             .setOnlyAlertOnce(true)
             .setShowWhen(false)
@@ -117,11 +114,9 @@ internal fun buildRunForegroundNotification(
                     deviceId = null,
                 ),
             ).setCategory(Notification.CATEGORY_SERVICE)
-            .setVisibility(Notification.VISIBILITY_PRIVATE)
             .setOnlyAlertOnce(true)
             .setShowWhen(false)
             .setOngoing(true)
-            .setAutoCancel(false)
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
         builder.setForegroundServiceBehavior(Notification.FOREGROUND_SERVICE_IMMEDIATE)
     }

@@ -40,6 +40,11 @@ class MainActivity : ComponentActivity() {
         AppLifecycle.notifyResumed()
     }
 
+    override fun onStop() {
+        super.onStop()
+        AppLifecycle.notifyStopped()
+    }
+
     private fun handleIntent(intent: Intent?) {
         when (intent?.action) {
             IntentActions.ACTION_SCAN -> {

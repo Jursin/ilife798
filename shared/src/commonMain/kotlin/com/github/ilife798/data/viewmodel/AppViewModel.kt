@@ -1,6 +1,7 @@
 package com.github.ilife798.data.viewmodel
 
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.ImageBitmap
@@ -38,6 +39,7 @@ import com.github.ilife798.toImageBitmap
 import com.github.ilife798.update.UpdateController
 import com.github.ilife798.update.UpdateDialogState
 import com.github.ilife798.util.currentTimeMillis
+import com.github.ilife798.util.openSponsorPage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -52,6 +54,15 @@ private const val SCORE_PAGE_SIZE = 200
 
 // 同一份数据的重复拉取冷却时间（DeviceController 共用）
 internal const val LOAD_COOLDOWN_MS = 5000L
+
+// 赞助提示触发的启动次数：第 21/51/101 次启动时弹出，101 次后不再弹。
+private val SPONSOR_PROMPT_AT = setOf(21, 51, 101)
+
+// 达到该启动次数后不再计数与提示。
+private const val MAX_LAUNCH_COUNT = 101
+
+// 判断“确实跳到外部应用并返回”的最短离开时长。
+private const val SPONSOR_RETURN_THRESHOLD_MS = 1500L
 
 class AppViewModel : ViewModel() {
     // HttpClient 构建较重，延迟到首次网络调用时再创建，避免阻塞首帧渲染
@@ -80,6 +91,13 @@ class AppViewModel : ViewModel() {
 
     var errorMessage by mutableStateOf<String?>(null)
         private set
+
+    // 赞助提示：>0 表示弹窗展示中，值为展示用的已启动次数
+    var sponsorPromptCount by mutableIntStateOf(0)
+        private set
+
+    private var sponsorPending = false
+    private var sponsorClickedAt = 0L
 
     // 检查更新（状态与流程见 UpdateController）
     val update =
@@ -133,7 +151,11 @@ class AppViewModel : ViewModel() {
         device.loadHomeDeviceTypePref()
         loadSavedAccount()
         update.loadSettings()
-        AppLifecycle.onResumed = { update.onAppResumed() }
+        registerLaunch()
+        AppLifecycle.onResumed = {
+            update.onAppResumed()
+            handleSponsorReturn()
+        }
         viewModelScope.launch {
             delay(1500.milliseconds)
             if (update.checkUpdateOnStart) update.checkForUpdate(silent = true)
@@ -157,6 +179,7 @@ class AppViewModel : ViewModel() {
                     themeMode =
                         ThemeMode.entries.firstOrNull { it.name == storage.getString(StorageKeys.THEME_MODE) }
                             ?: ThemeMode.System,
+                    disclaimerAcknowledged = storage.getBoolean(StorageKeys.DISCLAIMER_SHOWN, false),
                 )
         } catch (e: Exception) {
             logError("loadSettings", e)
@@ -811,6 +834,56 @@ class AppViewModel : ViewModel() {
     fun setThemeMode(mode: ThemeMode) {
         state = state.copy(themeMode = mode)
         AppStorage.instance.saveString(StorageKeys.THEME_MODE, mode.name)
+    }
+
+    // 首次启动须确认免责声明
+    fun acknowledgeDisclaimer() {
+        if (state.disclaimerAcknowledged) return
+        state = state.copy(disclaimerAcknowledged = true)
+        AppStorage.instance.saveBoolean(StorageKeys.DISCLAIMER_SHOWN, true)
+    }
+
+    // 启动次数统计与赞助提示：第 21/51/101 次启动弹出，达上限后不再计数
+    private fun registerLaunch() {
+        val storage = AppStorage.instance
+        if (storage.getBoolean(StorageKeys.SPONSOR_PROMPT_STOPPED, false)) return
+        val count = storage.getInt(StorageKeys.LAUNCH_COUNT, 0)
+        if (count >= MAX_LAUNCH_COUNT) return
+        val next = count + 1
+        storage.saveInt(StorageKeys.LAUNCH_COUNT, next)
+        if (next in SPONSOR_PROMPT_AT) sponsorPromptCount = next - 1
+    }
+
+    // 关闭赞助提示但不作选择：继续计数
+    fun dismissSponsor() {
+        sponsorPromptCount = 0
+    }
+
+    // 不再提醒：停止计数
+    fun neverRemindSponsor() {
+        sponsorPromptCount = 0
+        AppStorage.instance.saveBoolean(StorageKeys.SPONSOR_PROMPT_STOPPED, true)
+    }
+
+    // 立即赞助：打开链接并记录待确认状态
+    fun openSponsor() {
+        sponsorPromptCount = 0
+        if (openSponsorPage()) {
+            sponsorPending = true
+            sponsorClickedAt = currentTimeMillis()
+        }
+    }
+
+    // 从外部应用返回：确实跳出过则感谢并停止计数，仅弹出选择器未跳转则继续计数
+    private fun handleSponsorReturn() {
+        if (!sponsorPending) return
+        sponsorPending = false
+        if (AppLifecycle.backgroundedAt >= sponsorClickedAt &&
+            currentTimeMillis() - AppLifecycle.backgroundedAt >= SPONSOR_RETURN_THRESHOLD_MS
+        ) {
+            AppStorage.instance.saveBoolean(StorageKeys.SPONSOR_PROMPT_STOPPED, true)
+            showToast("感谢支持")
+        }
     }
 
     fun clearError() {

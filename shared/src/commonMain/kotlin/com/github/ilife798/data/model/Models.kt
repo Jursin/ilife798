@@ -200,4 +200,5 @@ data class AppState(
     val themeMode: ThemeMode = ThemeMode.System,
     val accountInfo: AccountInfo = AccountInfo(),
     val weekMask: Int = 0,
+    val disclaimerAcknowledged: Boolean = false,
 )

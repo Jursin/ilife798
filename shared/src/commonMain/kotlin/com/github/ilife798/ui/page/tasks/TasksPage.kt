@@ -35,6 +35,7 @@ import com.github.ilife798.ui.theme.rememberAppBlurBackdrop
 import com.github.ilife798.util.getDayOfWeek
 import com.github.ilife798.util.isIgnoringBatteryOptimizations
 import com.github.ilife798.util.openBatteryOptimizationSettings
+import kotlinx.coroutines.delay
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Card
@@ -47,6 +48,7 @@ import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Copy
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+import kotlin.time.Duration.Companion.milliseconds
 
 @Composable
 fun TasksPage(
@@ -62,10 +64,14 @@ fun TasksPage(
     val isLoggedIn = state.account.hasAnyToken
     var showStopDialog by remember { mutableStateOf(false) }
 
-    // 已忽略电池优化（设为「无限制」）后不再展示提示卡片；从系统设置返回时重新检查
+    // 已忽略电池优化（设为「无限制」）后不再展示提示卡片，从设置返回后短暂重试
     var batteryUnrestricted by remember { mutableStateOf(isIgnoringBatteryOptimizations()) }
     LaunchedEffect(AppLifecycle.resumeCount) {
-        batteryUnrestricted = isIgnoringBatteryOptimizations()
+        repeat(6) { attempt ->
+            batteryUnrestricted = isIgnoringBatteryOptimizations()
+            if (batteryUnrestricted || attempt == 5) return@LaunchedEffect
+            delay(400.milliseconds)
+        }
     }
 
     LaunchedEffect(missions) {
