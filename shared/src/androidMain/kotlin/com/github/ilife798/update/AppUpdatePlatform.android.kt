@@ -14,6 +14,9 @@ import com.github.ilife798.logDebug
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.plugins.HttpTimeout
+import kotlinx.coroutines.CancellableContinuation
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlin.coroutines.resume
 
 actual fun createUpdateHttpClient(): HttpClient =
     HttpClient(OkHttp) {
@@ -68,17 +71,36 @@ actual fun installApk(filePath: String): Boolean {
 
 private const val NOTIFICATION_PERMISSION_REQUEST_CODE = 9001
 
-actual fun requestNotificationPermission() {
+// 等待权限弹窗结果（无论是否授权）以恢复挂起的调用。
+@Volatile
+private var notificationPermissionContinuation: CancellableContinuation<Unit>? = null
+
+actual suspend fun requestNotificationPermission() {
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
     val activity = ActivityHolder.current ?: return
     if (activity.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) return
-    try {
-        ActivityCompat.requestPermissions(
-            activity,
-            arrayOf(Manifest.permission.POST_NOTIFICATIONS),
-            NOTIFICATION_PERMISSION_REQUEST_CODE,
-        )
-    } catch (e: Exception) {
-        logDebug("ILife798", "requestNotificationPermission: ${e.message}")
+    suspendCancellableCoroutine { continuation ->
+        notificationPermissionContinuation?.let { if (it.isActive) it.resume(Unit) }
+        notificationPermissionContinuation = continuation
+        continuation.invokeOnCancellation { notificationPermissionContinuation = null }
+        try {
+            ActivityCompat.requestPermissions(
+                activity,
+                arrayOf(Manifest.permission.POST_NOTIFICATIONS),
+                NOTIFICATION_PERMISSION_REQUEST_CODE,
+            )
+        } catch (e: Exception) {
+            logDebug("ILife798", "requestNotificationPermission: ${e.message}")
+            notificationPermissionContinuation = null
+            if (continuation.isActive) continuation.resume(Unit)
+        }
     }
+}
+
+// 由 MainActivity.onRequestPermissionsResult 调用，唤醒等待中的请求。
+fun onNotificationPermissionResult(requestCode: Int) {
+    if (requestCode != NOTIFICATION_PERMISSION_REQUEST_CODE) return
+    val continuation = notificationPermissionContinuation ?: return
+    notificationPermissionContinuation = null
+    if (continuation.isActive) continuation.resume(Unit)
 }

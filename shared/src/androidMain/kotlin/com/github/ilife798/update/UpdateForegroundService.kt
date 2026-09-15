@@ -1,4 +1,4 @@
-package com.github.ilife798
+package com.github.ilife798.update
 
 import android.app.Notification
 import android.app.Service
@@ -12,11 +12,12 @@ import android.os.Looper
 import android.os.PowerManager
 import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
+import com.github.ilife798.logDebug
 
-// 设备/积分任务运行期间维持前台服务并持有 Partial WakeLock，
-// 避免锁屏或切到后台后进程被厂商省电策略冻结、网络请求被中断。
-// 前台服务通知直接复用运行通知（含实时动态），由 [RunNotifications] 通过 Intent 传入。
-class RunForegroundService : Service() {
+// 应用更新下载期间维持前台服务并持有 Partial WakeLock，
+// 避免锁屏或切到后台后下载被厂商省电策略冻结、中断。
+// 通知由 [showUpdateProgressNotification] 构建后经 Intent 传入。
+class UpdateForegroundService : Service() {
     private var wakeLock: PowerManager.WakeLock? = null
     private val handler = Handler(Looper.getMainLooper())
 
@@ -34,7 +35,7 @@ class RunForegroundService : Service() {
         flags: Int,
         startId: Int,
     ): Int {
-        ensureRunChannels(this)
+        ensureUpdateChannel(this)
         val notification = intent?.runNotification()
         if (intent == null || notification == null) {
             stopSelf()
@@ -44,7 +45,7 @@ class RunForegroundService : Service() {
         renewWakeLock.run()
         ServiceCompat.startForeground(
             this,
-            intent.getIntExtra(EXTRA_NOTIFICATION_ID, RUN_NOTIFICATION_ID),
+            UPDATE_NOTIFICATION_ID,
             notification,
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
@@ -62,7 +63,7 @@ class RunForegroundService : Service() {
         val lock =
             wakeLock
                 ?: getSystemService(PowerManager::class.java)
-                    ?.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "ilife798:run")
+                    ?.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "ilife798:update")
                     ?.apply { setReferenceCounted(false) }
                 ?: return
         wakeLock = lock
@@ -79,28 +80,25 @@ class RunForegroundService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     companion object {
-        private const val EXTRA_NOTIFICATION_ID = "com.github.ilife798.extra.NOTIFICATION_ID"
-        private const val EXTRA_NOTIFICATION = "com.github.ilife798.extra.NOTIFICATION"
+        private const val EXTRA_NOTIFICATION = "com.github.ilife798.extra.UPDATE_NOTIFICATION"
         private const val WAKE_LOCK_TIMEOUT_MS = 10 * 60 * 1000L
         private const val WAKE_LOCK_RENEW_INTERVAL_MS = 9 * 60 * 1000L
 
-        // 运行中启动/更新前台服务；无运行任务时停止服务并释放 WakeLock。
+        // 下载中启动/更新前台服务；下载结束或停止时停止服务并释放 WakeLock。
         fun refresh(
             context: Context,
             active: Boolean,
-            notificationId: Int,
             notification: Notification?,
         ) {
-            val intent = Intent(context, RunForegroundService::class.java)
+            val intent = Intent(context, UpdateForegroundService::class.java)
             if (!active || notification == null) {
                 runCatching { context.stopService(intent) }
                 return
             }
-            intent.putExtra(EXTRA_NOTIFICATION_ID, notificationId)
             intent.putExtra(EXTRA_NOTIFICATION, notification)
             runCatching {
                 ContextCompat.startForegroundService(context, intent)
-            }.onFailure { logDebug("ILife798", "RunForegroundService.refresh: ${it.message}") }
+            }.onFailure { logDebug("ILife798", "UpdateForegroundService.refresh: ${it.message}") }
         }
     }
 }

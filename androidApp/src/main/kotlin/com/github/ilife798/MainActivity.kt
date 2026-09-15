@@ -6,6 +6,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import com.github.ilife798.data.api.ApiConfig
+import com.github.ilife798.update.onNotificationPermissionResult
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -21,7 +22,6 @@ class MainActivity : ComponentActivity() {
             clientId = BuildConfig.API_CID,
         )
 
-        RunNotifications.ensureInitialized()
         handleIntent(intent)
 
         setContent {
@@ -43,6 +43,16 @@ class MainActivity : ComponentActivity() {
     override fun onStop() {
         super.onStop()
         AppLifecycle.notifyStopped()
+    }
+
+    @Suppress("DEPRECATION", "OVERRIDE_DEPRECATION")
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<String>,
+        grantResults: IntArray,
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        onNotificationPermissionResult(requestCode)
     }
 
     private fun handleIntent(intent: Intent?) {

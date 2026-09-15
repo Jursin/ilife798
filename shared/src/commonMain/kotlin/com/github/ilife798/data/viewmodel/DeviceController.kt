@@ -225,7 +225,7 @@ class DeviceController(
         parsed.deviceId?.takeIf { it.isNotEmpty() }?.let { return it }
         val qrId = parsed.qrId
         if (qrId.isNullOrEmpty()) {
-            onToast("无法识别二维码内容")
+            onToast("未知二维码内容")
             return null
         }
         return try {
@@ -410,6 +410,8 @@ class DeviceController(
                         runningDevices.remove(deviceId)
                     }
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 onToast("操作失败：${e.message}")
             } finally {

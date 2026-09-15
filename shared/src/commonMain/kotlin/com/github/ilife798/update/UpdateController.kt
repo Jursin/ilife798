@@ -114,12 +114,14 @@ class UpdateController(
         updateJob =
             scope.launch {
                 try {
+                    // 首次下载前请求通知权限（挂起直到弹窗关闭），保证前台服务通知/实时动态能正常展示
+                    requestNotificationPermission()
                     val path =
                         downloadApkToFile(AppUpdate.applyProxy(url, githubProxyUrl)) { progress ->
                             lastUpdateProgress = progress
-                            if (progressDialogDismissed) {
-                                showUpdateProgressNotification(progress)
-                            } else {
+                            // 下载期间通知栏始终显示进度；对话框未收起时同步更新对话框
+                            showUpdateProgressNotification(progress)
+                            if (!progressDialogDismissed) {
                                 dialog = UpdateDialogState.Downloading(progress)
                             }
                         }
@@ -143,14 +145,12 @@ class UpdateController(
     fun hideUpdateProgressDialog() {
         progressDialogDismissed = true
         dialog = UpdateDialogState.None
-        requestNotificationPermission()
         showUpdateProgressNotification(lastUpdateProgress)
     }
 
     fun reopenUpdateProgressDialog() {
         if (!downloadingUpdate) return
         progressDialogDismissed = false
-        cancelUpdateProgressNotification()
         dialog = UpdateDialogState.Downloading(lastUpdateProgress)
     }
 

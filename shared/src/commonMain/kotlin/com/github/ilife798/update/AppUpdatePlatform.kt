@@ -23,8 +23,8 @@ expect suspend fun downloadApkToFile(
     onProgress: (Float) -> Unit,
 ): String
 
-// 请求通知权限（Android 13+ 需要）。
-expect fun requestNotificationPermission()
+// 请求通知权限（Android 13+ 需要），挂起直到权限弹窗关闭（无论是否授权）。
+expect suspend fun requestNotificationPermission()
 
 // 在通知栏显示下载进度。
 expect fun showUpdateProgressNotification(progress: Float)

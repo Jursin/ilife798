@@ -11,12 +11,13 @@ import androidx.annotation.RequiresApi
 internal const val RUN_NOTIFICATION_GROUP = "com.github.ilife798.run"
 internal const val DEVICE_ID_BASE = 2201
 internal const val DEVICE_ID_RANGE = 900
-internal const val TASK_NOTIFICATION_ID = 2301
+
+// 前台服务通知的固定 id（镜像当前主运行通知），避开设备 id 段与更新通知 id。
+internal const val RUN_NOTIFICATION_ID = 2001
 
 private const val REQUEST_DEVICE_CONTENT = 4101
 private const val REQUEST_TASK_CONTENT = 4103
 private const val REQUEST_STOP_TASKS = 4104
-private const val REQUEST_FOREGROUND_CONTENT = 4105
 private const val REQUEST_STOP_DEVICE_BASE = 4200
 private const val REQUEST_STOP_DEVICE_RANGE = 500
 
@@ -92,34 +93,6 @@ internal fun buildTaskNotification(
                     ).build(),
             )
     applyRunProgress(builder)
-    return builder.build()
-}
-
-// 前台服务通知：常驻展示当前运行概况，保证进程在锁屏/后台不被冻结。
-internal fun buildRunForegroundNotification(
-    context: Context,
-    summary: String,
-): Notification {
-    val builder =
-        Notification
-            .Builder(context, CHANNEL_RUN_FOREGROUND)
-            .setSmallIcon(com.github.ilife798.shared.R.drawable.ic_notify_task)
-            .setContentTitle("ILife798 后台运行中")
-            .setContentText(summary.ifEmpty { "后台运行中" })
-            .setContentIntent(
-                activityPendingIntent(
-                    context,
-                    REQUEST_FOREGROUND_CONTENT,
-                    IntentActions.ACTION_OPEN_HOME,
-                    deviceId = null,
-                ),
-            ).setCategory(Notification.CATEGORY_SERVICE)
-            .setOnlyAlertOnce(true)
-            .setShowWhen(false)
-            .setOngoing(true)
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-        builder.setForegroundServiceBehavior(Notification.FOREGROUND_SERVICE_IMMEDIATE)
-    }
     return builder.build()
 }
 

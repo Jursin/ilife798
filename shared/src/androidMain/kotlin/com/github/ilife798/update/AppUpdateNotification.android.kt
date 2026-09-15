@@ -1,14 +1,10 @@
 package com.github.ilife798.update
 
-import android.Manifest
-import android.annotation.SuppressLint
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager
-import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import com.github.ilife798.ApplicationContext
@@ -16,9 +12,9 @@ import com.github.ilife798.IntentActions
 import com.github.ilife798.logDebug
 
 private const val UPDATE_CHANNEL_ID = "app_update"
-private const val UPDATE_NOTIFICATION_ID = 1001
+internal const val UPDATE_NOTIFICATION_ID = 1001
 
-private fun ensureUpdateChannel(context: Context) {
+internal fun ensureUpdateChannel(context: Context) {
     val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
     if (manager.getNotificationChannel(UPDATE_CHANNEL_ID) == null) {
         manager.createNotificationChannel(
@@ -34,7 +30,6 @@ private fun ensureUpdateChannel(context: Context) {
     }
 }
 
-@SuppressLint("MissingPermission")
 actual fun showUpdateProgressNotification(progress: Float) {
     val context = ApplicationContext.instance
     ensureUpdateChannel(context)
@@ -61,19 +56,14 @@ actual fun showUpdateProgressNotification(progress: Float) {
             .setOnlyAlertOnce(true)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .build()
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-        context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
-    ) {
-        return
-    }
-    try {
-        NotificationManagerCompat.from(context).notify(UPDATE_NOTIFICATION_ID, notification)
-    } catch (e: Exception) {
-        logDebug("ILife798", "showUpdateProgressNotification: ${e.message}")
-    }
+    // 交由前台服务常驻展示，保证后台/锁屏下载不被冻结
+    UpdateForegroundService.refresh(context, active = true, notification = notification)
 }
 
 actual fun cancelUpdateProgressNotification() {
+    runCatching {
+        UpdateForegroundService.refresh(ApplicationContext.instance, active = false, notification = null)
+    }
     try {
         NotificationManagerCompat.from(ApplicationContext.instance).cancel(UPDATE_NOTIFICATION_ID)
     } catch (e: Exception) {

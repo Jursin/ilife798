@@ -271,7 +271,6 @@ class TaskController(
         val isCurrentAccount = { getState().account.appToken == startApp && getState().account.token == startPoints }
         lastMissionsLoadTime = 0L
         onResetScoreCooldown()
-        requestNotificationPermission()
         onToast("开始运行积分任务")
         taskJob =
             scope.launch {
@@ -279,6 +278,8 @@ class TaskController(
                 onError(null)
                 setState { it.copy(taskLogs = emptyList()) }
                 rateLimiter.clear()
+                // 等通知权限弹窗关闭（无论是否授权）后再开始，保证实时动态/前台服务通知能正常展示
+                requestNotificationPermission()
                 RunNotifications.updateTask(0)
                 try {
                     addTaskLog("正在加载任务列表...")

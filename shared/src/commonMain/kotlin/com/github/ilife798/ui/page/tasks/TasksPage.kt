@@ -295,6 +295,7 @@ fun TasksPage(
             message = "确定要停止正在运行的积分任务吗？",
             appBlur = state.appBlur,
             confirmText = "停止",
+            destructive = true,
             onConfirm = {
                 viewModel.stopTasks()
                 showStopDialog = false
