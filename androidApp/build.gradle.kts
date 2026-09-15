@@ -51,8 +51,8 @@ android {
         applicationId = "com.github.ilife798"
         minSdk = 26
         targetSdk = 37
-        versionCode = 5
-        versionName = "1.2.2"
+        versionCode = 6
+        versionName = "1.2.3"
 
         buildConfigField("String", "API_GATEWAY", "\"${secretsProps.getProperty("API_GATEWAY", "")}\"")
         buildConfigField("String", "SIGN_SALT", "\"${secretsProps.getProperty("SIGN_SALT", "")}\"")
