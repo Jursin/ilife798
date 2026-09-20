@@ -69,6 +69,46 @@
 - Android Debug: `./gradlew :androidApp:assembleDebug`
 - Android Release: `./gradlew :androidApp:assembleRelease`
 
+### iOS 构建（未签名）
+
+要求：macOS + Xcode 16+ + JDK 21。
+
+```sh
+# 编译 iOS 双架构
+./gradlew :shared:compileKotlinIosArm64 :shared:compileKotlinIosSimulatorArm64
+
+# 产出未签名 IPA：iosApp/build/dist/ILife798-v<版本>-unsigned-ios.ipa
+./iosApp/scripts/build-unsigned-ipa.sh
+
+# 本地模拟器验证
+xcodebuild -project iosApp/iosApp.xcodeproj -scheme iosApp -configuration Debug \
+  -destination 'platform=iOS Simulator,name=iPhone 14 Pro' -derivedDataPath iosApp/build/sim-dd build \
+  CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY=""
+xcrun simctl boot "iPhone 14 Pro"
+xcrun simctl install booted iosApp/build/sim-dd/Build/Products/Debug-iphonesimulator/iosApp.app
+xcrun simctl launch booted com.github.ilife798.iosApp
+```
+
+### 未签名 IPA 安装说明
+
+产出的 `.ipa` **未经签名，不能直接安装到 iPhone**，这是预期行为（本仓库不持有任何签名证书）。请自行签名后安装：
+
+- **图形工具（推荐）**：用 [Sideloadly](https://sideloadly.io) 或 AltStore 将 IPA 用你的 Apple ID 签名并侧载（个人免费账号 7 天有效期）。
+- **命令行手动签名**（需已有 Apple 开发证书与配置文件）：
+
+```sh
+unzip ILife798-v<版本>-unsigned-ios.ipa -d /tmp/ios-sign
+codesign -f -s "Apple Development: <你的证书名>" /tmp/ios-sign/Payload/iosApp.app/Frameworks/shared.framework
+codesign -f -s "Apple Development: <你的证书名>" /tmp/ios-sign/Payload/iosApp.app
+cd /tmp/ios-sign && zip -qry ../ILife798-signed.ipa Payload
+```
+
+签名后的 IPA 通过 Xcode（Devices & Simulators）或 Apple Configurator 安装到设备。
+
+> 环境提示：Xcode 16.3+ 移除了工具链内 `strip`，Kotlin/Native 归档可能报
+> `.../XcodeDefault.xctoolchain/usr/bin/strip: No such file or directory`。
+> 修复：`ln -s /usr/bin/strip "$(xcode-select -p)/Toolchains/XcodeDefault.xctoolchain/usr/bin/strip"`
+
 ## 🛠️ 运行测试
 
 - Android tests: `./gradlew :shared:testAndroidHostTest`

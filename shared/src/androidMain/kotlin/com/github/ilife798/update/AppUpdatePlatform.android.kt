@@ -104,3 +104,8 @@ fun onNotificationPermissionResult(requestCode: Int) {
     notificationPermissionContinuation = null
     if (continuation.isActive) continuation.resume(Unit)
 }
+
+// Android 走应用内 APK 下载安装，不支持发布页移交；保持零行为变化。
+actual fun supportsReleasePageHandoff(): Boolean = false
+
+actual fun openReleasePage(url: String): Boolean = false

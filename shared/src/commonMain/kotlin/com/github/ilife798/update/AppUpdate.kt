@@ -9,6 +9,9 @@ import kotlinx.serialization.json.Json
 private const val RELEASES_API = "https://api.github.com/repos/Jursin/ilife798/releases/latest"
 
 object AppUpdate {
+    // iOS 更新移交目标：项目发布页（https 不受 ATS 限制，Info.plist 无需新增）。
+    const val RELEASES_PAGE_URL = "https://github.com/Jursin/ilife798/releases"
+
     private val json = Json { ignoreUnknownKeys = true }
 
     private val client by lazy { createUpdateHttpClient() }

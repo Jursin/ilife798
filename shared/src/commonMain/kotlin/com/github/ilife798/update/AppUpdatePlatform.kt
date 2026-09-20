@@ -41,3 +41,9 @@ expect fun downloadedApkPathIfValid(
     sha256: String?,
     size: Long,
 ): String?
+
+// 是否支持「跳转发布页下载」的更新移交：无 APK 安装概念的平台返回 true。
+expect fun supportsReleasePageHandoff(): Boolean
+
+// 打开发布页并返回是否成功发起跳转；不支持移交的平台为空实现并返回 false。
+expect fun openReleasePage(url: String): Boolean

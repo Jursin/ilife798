@@ -1,0 +1,154 @@
+name: iOS CI and Release
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  push:
+    branches: [main]
+    tags:
+      - 'v*'
+    paths-ignore:
+      - 'androidApp/**'
+      - '.github/workflows/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  APP_MODULE: androidApp
+
+jobs:
+  validate:
+    name: Validate iOS build
+    if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4
+        with:
+          packages: 'platform-tools'
+
+      - name: Install Android platform
+        run: sdkmanager 'platforms;android-37.0'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x ./gradlew
+
+      - name: Generate secrets.properties
+        env:
+          API_GATEWAY: ${{ secrets.API_GATEWAY }}
+          SIGN_SALT: ${{ secrets.SIGN_SALT }}
+          API_CID: ${{ secrets.API_CID }}
+        run: |
+          printf 'API_GATEWAY=%s\n' "$API_GATEWAY" > secrets.properties
+          printf 'SIGN_SALT=%s\n' "$SIGN_SALT" >> secrets.properties
+          printf 'API_CID=%s\n' "$API_CID" >> secrets.properties
+
+      - name: Warn on missing secrets
+        run: |
+          for f in API_GATEWAY SIGN_SALT API_CID; do
+            grep -q "^$f=..*$" secrets.properties || echo "::warning::secrets.$f 未配置——构建可用，但产出的 IPA 访问后端会失败"
+          done
+
+      - name: Compile iOS targets
+        run: ./gradlew :shared:compileKotlinIosArm64 :shared:compileKotlinIosSimulatorArm64 --no-daemon --stacktrace
+
+      - name: Build unsigned IPA
+        run: ./iosApp/scripts/build-unsigned-ipa.sh
+
+      - name: Upload unsigned IPA
+        uses: actions/upload-artifact@v7
+        with:
+          name: ilife798-unsigned-ios-ipa
+          path: iosApp/build/dist/*.ipa
+          if-no-files-found: error
+
+  release:
+    name: Build and publish iOS release
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    runs-on: macos-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4
+        with:
+          packages: 'platform-tools'
+
+      - name: Install Android platform
+        run: sdkmanager 'platforms;android-37.0'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x ./gradlew
+
+      - name: Verify release tag matches app version
+        run: |
+          version_name="$(sed -n 's/^[[:space:]]*versionName = "\(.*\)"/\1/p' "$APP_MODULE/build.gradle.kts" | head -n 1)"
+          test "$GITHUB_REF_NAME" = "v$version_name"
+
+      - name: Generate secrets.properties
+        env:
+          API_GATEWAY: ${{ secrets.API_GATEWAY }}
+          SIGN_SALT: ${{ secrets.SIGN_SALT }}
+          API_CID: ${{ secrets.API_CID }}
+        run: |
+          printf 'API_GATEWAY=%s\n' "$API_GATEWAY" > secrets.properties
+          printf 'SIGN_SALT=%s\n' "$SIGN_SALT" >> secrets.properties
+          printf 'API_CID=%s\n' "$API_CID" >> secrets.properties
+
+      - name: Fail on missing release secrets
+        run: |
+          for f in API_GATEWAY SIGN_SALT API_CID; do
+            grep -q "^$f=..*$" secrets.properties || { echo "::error::release secrets.$f 未配置"; exit 1; }
+          done
+
+      - name: Build unsigned IPA
+        run: ./iosApp/scripts/build-unsigned-ipa.sh
+
+      - name: Upload unsigned IPA artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: ilife798-${{ github.ref_name }}-unsigned-ios-ipa
+          path: iosApp/build/dist/*.ipa
+          if-no-files-found: error
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          assets=(iosApp/build/dist/*.ipa)
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" "${assets[@]}" --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" "${assets[@]}" --generate-notes \
+              || gh release upload "$GITHUB_REF_NAME" "${assets[@]}" --clobber
+          fi
