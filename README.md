@@ -33,12 +33,12 @@
   - 输入设备编号/扫码添加设备
   - 启动/停止/删除设备
   - 可切换设备类型
-  - 启动设备后应用后台运行时显示设备运行状态通知（Android 16+ 提升为实时动态）
+  - 设备运行中通知（Android 16+ 提升为实时动态）
 - **消费概览：** 展示昨日花费、今日花费、本月平均花费
 - **积分任务：**
   - 一键运行积分任务
   - 显示任务列表、运行记录
-  - 运行积分任务后应用后台运行时显示积分任务运行状态通知（Android 16+ 提升为实时动态）
+  - 积分任务运行中通知（Android 16+ 提升为实时动态）
 - **我的账单：**
   - 显示详细账单记录，支持切换钱包、账单类型
   - 支持充值/退款
@@ -126,6 +126,10 @@ cd /tmp/ios-sign && zip -qry ../ILife798-signed.ipa Payload
 ## 📚 开放源代码许可
 [本项目所使用的第三方开源库及其许可证信息](shared/src/commonMain/composeResources/files/aboutlibraries.json)
 
+## 🙏 感谢
+
+感谢 [Tune](https://github.com/tunecc) 提供 iOS 端代码
+
 ## 📜 许可证
 
 本项目使用 [MIT License](LICENSE)，第三方开源库继续遵循各自的许可证。
@@ -142,3 +146,6 @@ cd /tmp/ios-sign && zip -qry ../ILife798-signed.ipa Payload
 - 请在本应用上仅使用本人有权访问的账户和设备，并遵守相关服务协议。
 - 你应了解自动运行积分任务存在被官方标记、拉黑甚至追究的风险，因使用本应用造成严重后果的由使用者自行承担，本项目概不负责。
 - 你应了解官方可能会变更接口或相关认证方式，本项目不保证持续可用性，不一定及时通知或修复。
+
+## 🌟 星标历史
+[![Stargazers over time](https://starcharts.vercel.app/Jursin/ilife798.svg?variant=adaptive)](https://starcharts.vercel.app/Jursin/ilife798)
