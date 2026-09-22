@@ -45,7 +45,7 @@ actual fun downloadedApkPathIfValid(
     size: Long,
 ): String? = null
 
-// iOS 无 APK 安装概念：更新移交发布页，由用户在 Safari 自行下载 IPA。
+// 更新跳浏览器打开 ipa 链接，找不到则回退发布页。
 actual fun supportsReleasePageHandoff(): Boolean = true
 
 actual fun openReleasePage(url: String): Boolean =

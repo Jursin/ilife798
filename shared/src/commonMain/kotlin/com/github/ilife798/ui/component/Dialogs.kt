@@ -19,13 +19,13 @@ import top.yukonga.miuix.kmp.theme.LocalDismissState
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.window.WindowDialog
 
-// 对话框底部的取消/确认按钮行。
+// 对话框底部的取消/确认按钮行，[cancelText] 为 null 时只显示确认按钮。
 @Composable
-fun DialogActionRow(
+private fun DialogActionRow(
     confirmText: String,
     onConfirm: () -> Unit,
     onCancel: () -> Unit,
-    cancelText: String = "取消",
+    cancelText: String? = "取消",
     cancelEnabled: Boolean = true,
     confirmEnabled: Boolean = true,
     destructive: Boolean = false,
@@ -35,12 +35,14 @@ fun DialogActionRow(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        TextButton(
-            modifier = Modifier.weight(1f),
-            onClick = onCancel,
-            enabled = cancelEnabled,
-            text = cancelText,
-        )
+        if (cancelText != null) {
+            TextButton(
+                modifier = Modifier.weight(1f),
+                onClick = onCancel,
+                enabled = cancelEnabled,
+                text = cancelText,
+            )
+        }
         TextButton(
             modifier = Modifier.weight(1f),
             onClick = onConfirm,
@@ -64,7 +66,7 @@ fun ConfirmDialog(
     onDismiss: () -> Unit,
     onConfirm: () -> Unit,
     confirmText: String = "确定",
-    cancelText: String = "取消",
+    cancelText: String? = "取消",
     destructive: Boolean = false,
     cancelEnabled: Boolean = true,
     confirmEnabled: Boolean = true,

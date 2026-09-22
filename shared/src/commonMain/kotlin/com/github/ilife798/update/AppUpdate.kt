@@ -9,7 +9,7 @@ import kotlinx.serialization.json.Json
 private const val RELEASES_API = "https://api.github.com/repos/Jursin/ilife798/releases/latest"
 
 object AppUpdate {
-    // iOS 更新移交目标：项目发布页（https 不受 ATS 限制，Info.plist 无需新增）。
+    // 更新移交回退：未找到本平台安装包时打开发布页。
     const val RELEASES_PAGE_URL = "https://github.com/Jursin/ilife798/releases"
 
     private val json = Json { ignoreUnknownKeys = true }
@@ -31,10 +31,18 @@ object AppUpdate {
         abis: List<String>,
     ): GithubAsset? {
         for (abi in abis) {
-            release.assets.firstOrNull { it.name.contains(abi, ignoreCase = true) }?.let { return it }
+            release.assets
+                .firstOrNull { it.name.contains(abi, ignoreCase = true) && it.browserDownloadUrl.isNotEmpty() }
+                ?.let { return it }
         }
         return null
     }
+
+    // 按 .ipa 选择本平台安装包，忽略大小写且须有下载链接。
+    fun selectIpaAsset(release: GithubRelease): GithubAsset? =
+        release.assets.firstOrNull {
+            it.name.endsWith(".ipa", ignoreCase = true) && it.browserDownloadUrl.isNotEmpty()
+        }
 
     fun compareVersions(
         first: String,

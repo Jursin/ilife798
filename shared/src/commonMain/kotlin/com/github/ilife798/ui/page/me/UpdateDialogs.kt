@@ -44,7 +44,7 @@ fun UpdateDialogs(
                 title = "正在下载更新",
                 appBlur = viewModel.state.appBlur,
                 confirmText = "停止下载",
-                cancelText = "后台下载",
+                cancelText = null,
                 destructive = true,
                 onConfirm = { viewModel.stopUpdate() },
                 onDismiss = { viewModel.hideUpdateProgressDialog() },

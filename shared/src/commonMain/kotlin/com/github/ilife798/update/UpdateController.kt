@@ -33,6 +33,7 @@ class UpdateController(
 
     private var pendingUpdateUrl = ""
     private var pendingReleasePage = false
+    private var pendingHandoffUrl = ""
     private var pendingUpdateSha256: String? = null
     private var pendingUpdateSize = 0L
     private var downloadedApkPath: String? = null
@@ -68,21 +69,32 @@ class UpdateController(
                 val remoteVersion = release.tagName.removePrefix("v").trim()
                 if (AppUpdate.compareVersions(remoteVersion, getAppVersion()) > 0) {
                     onDismissToast()
-                    val asset = AppUpdate.selectAsset(release, currentAbis())
-                    if (asset == null || asset.browserDownloadUrl.isEmpty()) {
-                        if (supportsReleasePageHandoff()) {
-                            // iOS 无 APK 可装：移交发布页，复用既有 Available 弹窗
+                    val handoff = supportsReleasePageHandoff()
+                    val asset =
+                        if (handoff) {
+                            AppUpdate.selectIpaAsset(release)
+                        } else {
+                            AppUpdate.selectAsset(release, currentAbis())
+                        }
+                    if (asset == null) {
+                        if (handoff) {
+                            // 未找到安装包：startUpdate 时跳 releases 页
                             pendingReleasePage = true
+                            pendingHandoffUrl = ""
                             dialog = UpdateDialogState.Available(remoteVersion)
                         } else if (!silent) {
                             onToast("暂无本设备安装包")
                         }
                         return@launch
                     }
-                    pendingReleasePage = false
-                    pendingUpdateUrl = asset.browserDownloadUrl
-                    pendingUpdateSha256 = asset.digest?.substringAfter(':')?.takeIf { it.isNotBlank() }
-                    pendingUpdateSize = asset.size
+                    pendingReleasePage = handoff
+                    if (handoff) {
+                        pendingHandoffUrl = asset.browserDownloadUrl
+                    } else {
+                        pendingUpdateUrl = asset.browserDownloadUrl
+                        pendingUpdateSha256 = asset.digest?.substringAfter(':')?.takeIf { it.isNotBlank() }
+                        pendingUpdateSize = asset.size
+                    }
                     dialog = UpdateDialogState.Available(remoteVersion)
                 } else if (!silent) {
                     onDismissToast()
@@ -103,11 +115,19 @@ class UpdateController(
     fun startUpdate() {
         if (downloadingUpdate) return
         if (pendingReleasePage) {
-            // 移交路径：打开发布页后关闭对话框，不进入下载/安装流程
-            val opened = openReleasePage(AppUpdate.RELEASES_PAGE_URL)
+            // 移交路径：浏览器打开本平台安装包，找不到则回退发布页
+            val handoffUrl = pendingHandoffUrl
+            val url =
+                if (handoffUrl.isEmpty()) {
+                    AppUpdate.RELEASES_PAGE_URL
+                } else {
+                    AppUpdate.applyProxy(handoffUrl, githubProxyUrl)
+                }
+            val opened = openReleasePage(url)
             logDebug("UpdateController", "openReleasePage: $opened")
-            onToast("已打开发布页，请下载最新 IPA")
+            onToast(if (handoffUrl.isEmpty()) "已打开发布页" else "已打开下载链接")
             pendingReleasePage = false
+            pendingHandoffUrl = ""
             dialog = UpdateDialogState.None
             return
         }

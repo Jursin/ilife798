@@ -1,17 +1,12 @@
 #!/usr/bin/env bash
 # 无签名 IPA 打包：xcodebuild 归档（不使用任何签名身份）→ Payload 组装 → zip 为 .ipa。
 # 用法：./iosApp/scripts/build-unsigned-ipa.sh
-# 环境变量：IPA_VERSION 可覆盖版本号（默认取 androidApp 的 versionName）。
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT_DIR"
 
-VERSION="${IPA_VERSION:-$(sed -n 's/^[[:space:]]*versionName = "\(.*\)"/\1/p' androidApp/build.gradle.kts | head -n 1)}"
-if [ -z "$VERSION" ]; then
-  echo "错误：无法确定版本号（androidApp/build.gradle.kts 的 versionName）" >&2
-  exit 1
-fi
+APP_NAME="ilife798"
 
 ARCHIVE_PATH="$ROOT_DIR/iosApp/build/iosApp.xcarchive"
 DIST_DIR="$ROOT_DIR/iosApp/build/dist"
@@ -36,7 +31,7 @@ mkdir -p "$STAGING/Payload"
 cp -R "$APP_PATH" "$STAGING/Payload/"
 
 mkdir -p "$DIST_DIR"
-IPA_PATH="$DIST_DIR/ILife798-v$VERSION-unsigned-ios.ipa"
+IPA_PATH="$DIST_DIR/$APP_NAME-ios-unsigned.ipa"
 rm -f "$IPA_PATH"
 (cd "$STAGING" && ditto -c -k --keepParent Payload "$IPA_PATH")
 

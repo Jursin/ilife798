@@ -49,6 +49,31 @@ class AppUpdateTest {
     }
 
     @Test
+    fun selectIpaAssetMatchesPlatformPackage() {
+        val release =
+            GithubRelease(
+                assets =
+                    listOf(
+                        GithubAsset(
+                            name = "ilife798-android-arm64-v8a-release.apk",
+                            browserDownloadUrl = "https://example.com/app.apk",
+                        ),
+                        GithubAsset(
+                            name = "ILIFE798-IOS-UNSIGNED.IPA",
+                            browserDownloadUrl = "https://example.com/app.ipa",
+                        ),
+                    ),
+            )
+        assertEquals("ILIFE798-IOS-UNSIGNED.IPA", AppUpdate.selectIpaAsset(release)?.name)
+        assertNull(
+            AppUpdate.selectIpaAsset(
+                GithubRelease(assets = listOf(GithubAsset(name = "app.apk", browserDownloadUrl = "https://example.com/a.apk"))),
+            ),
+        )
+        assertNull(AppUpdate.selectIpaAsset(GithubRelease(assets = listOf(GithubAsset(name = "a.ipa")))))
+    }
+
+    @Test
     fun applyProxyPrefixesOnlyWhenConfigured() {
         val url = "https://github.com/a/b/releases/download/v1/app.apk"
         assertEquals(url, AppUpdate.applyProxy(url, ""))
@@ -89,9 +114,18 @@ class AppUpdateTest {
         GithubRelease(
             assets =
                 listOf(
-                    GithubAsset(name = "ilife798-android-arm64-v8a-release.apk"),
-                    GithubAsset(name = "ilife798-android-armeabi-v7a-release.apk"),
-                    GithubAsset(name = "ilife798-android-x86_64-release.apk"),
+                    GithubAsset(
+                        name = "ilife798-android-arm64-v8a-release.apk",
+                        browserDownloadUrl = "https://example.com/arm64-v8a.apk",
+                    ),
+                    GithubAsset(
+                        name = "ilife798-android-armeabi-v7a-release.apk",
+                        browserDownloadUrl = "https://example.com/armeabi-v7a.apk",
+                    ),
+                    GithubAsset(
+                        name = "ilife798-android-x86_64-release.apk",
+                        browserDownloadUrl = "https://example.com/x86_64.apk",
+                    ),
                 ),
         )
 }
