@@ -44,11 +44,12 @@
         </activity>
 
         <service
-            android:name=".DeviceTileService"
+            android:name="com.github.ilife798.DeviceTileService"
             android:exported="true"
             android:icon="@drawable/ic_tile_device"
             android:label="@string/tile_device_label"
-            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE"
+            tools:ignore="MissingClass">
             <intent-filter>
                 <action android:name="android.service.quicksettings.action.QS_TILE" />
             </intent-filter>

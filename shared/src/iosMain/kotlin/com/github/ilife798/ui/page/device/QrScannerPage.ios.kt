@@ -61,10 +61,8 @@ import platform.UIKit.UIApplication
 import platform.UIKit.UIApplicationOpenSettingsURLString
 import platform.UIKit.UIApplicationWillEnterForegroundNotification
 import platform.UIKit.UIView
-import platform.darwin.DISPATCH_QUEUE_PRIORITY_DEFAULT
 import platform.darwin.NSObject
 import platform.darwin.dispatch_async
-import platform.darwin.dispatch_get_global_queue
 import platform.darwin.dispatch_get_main_queue
 import platform.darwin.dispatch_queue_create
 import platform.darwin.dispatch_queue_t
@@ -205,9 +203,7 @@ actual fun QrScannerPage(
                                 .clickable {
                                     // 前往系统设置开启相机权限
                                     val settingsUrl = NSURL(string = UIApplicationOpenSettingsURLString)
-                                    if (settingsUrl != null) {
-                                        runCatching { UIApplication.sharedApplication.openURL(settingsUrl) }
-                                    }
+                                    runCatching { UIApplication.sharedApplication.openURL(settingsUrl) }
                                 },
                         contentAlignment = Alignment.Center,
                     ) {

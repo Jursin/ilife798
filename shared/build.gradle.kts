@@ -45,6 +45,7 @@ val iosApiCid = resolveIosBuildConfig("ILIFE798_API_CID", "API_CID")
 
 val generateIosBuildConfig =
     tasks.register("generateIosBuildConfig") {
+        description = "生成 iOS 构建期常量（网关/签名盐/CID）"
         val generatedDir = layout.buildDirectory.dir("generated/iosBuildConfig/kotlin")
         val apiGateway = iosApiGateway
         val signSalt = iosSignSalt

@@ -25,7 +25,7 @@ actual fun WindowBlurEffect(useBlur: Boolean) {
 
     DisposableEffect(window, useBlur, blurEnabledBySystem) {
         if (useBlur && blurEnabledBySystem) {
-            window.applyBlur(30)
+            window.applyBlur()
         } else {
             window.clearBlur()
         }
@@ -57,11 +57,11 @@ private fun isCrossWindowBlurEnabled(): Boolean {
 }
 
 @RequiresApi(Build.VERSION_CODES.S)
-private fun Window.applyBlur(radius: Int) {
+private fun Window.applyBlur() {
     addFlags(WindowManager.LayoutParams.FLAG_BLUR_BEHIND)
     attributes =
         attributes.apply {
-            blurBehindRadius = radius.coerceIn(0, 150)
+            blurBehindRadius = 30
         }
 }
 
