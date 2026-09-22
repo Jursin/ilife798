@@ -1,10 +1,11 @@
 package com.github.ilife798.util
 
-fun md5(input: String): String {
-    val data = input.encodeToByteArray()
-    val hash = md5Pure(data)
+fun md5(input: String): String = md5Pure(input.encodeToByteArray()).toLowerHex()
+
+// 字节数组 → 小写十六进制。
+internal fun ByteArray.toLowerHex(): String {
     val hexChars = "0123456789abcdef"
-    return hash.joinToString("") { byte ->
+    return joinToString("") { byte ->
         val v = byte.toInt() and 0xFF
         "${hexChars[v shr 4]}${hexChars[v and 0x0F]}"
     }

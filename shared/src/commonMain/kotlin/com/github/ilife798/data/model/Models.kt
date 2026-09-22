@@ -1,8 +1,5 @@
 package com.github.ilife798.data.model
 
-import kotlinx.serialization.Serializable
-
-@Serializable
 data class Account(
     val phone: String = "",
     val isLoggedIn: Boolean = false,
@@ -17,7 +14,6 @@ data class Account(
     val hasAnyToken: Boolean get() = preferredToken.isNotEmpty()
 }
 
-@Serializable
 data class Device(
     val id: String,
     val name: String,
@@ -43,7 +39,6 @@ enum class HomeDeviceType(
 }
 
 // 设备可选项（来自 /ui/app/dev/status?more=true 的 bm.parts）
-@Serializable
 data class DeviceOption(
     val mode: Int = -1,
     val name: String = "",
@@ -52,14 +47,12 @@ data class DeviceOption(
 )
 
 // 货道（售货机/加液），对应 gs.items
-@Serializable
 data class DeviceGoods(
     val pos: Int = 0,
     val out: Int = 0,
 )
 
 // 设备启动可选项集合
-@Serializable
 data class DeviceStartOptions(
     val parts: List<DeviceOption> = emptyList(),
     val subCount: Int = 0,
@@ -73,13 +66,11 @@ data class DevicePendingStart(
     val options: DeviceStartOptions,
 )
 
-@Serializable
 data class PointsInfo(
     val available: Int? = null,
     val total: Int? = null,
 )
 
-@Serializable
 data class MissionInfo(
     val adId: String = "",
     val name: String = "",
@@ -90,7 +81,6 @@ data class MissionInfo(
     val sourceToken: String = "",
 )
 
-@Serializable
 data class ScoreRecord(
     val score: Int = 0,
     val name: String = "",
@@ -105,7 +95,6 @@ enum class ScoreFilter(
     Expense(105),
 }
 
-@Serializable
 data class WalletAccount(
     val id: String = "",
     val eid: String = "",
@@ -123,7 +112,6 @@ data class WalletAccount(
     val refundable: Double get() = if (auth) olCash + ofCash else olCash
 }
 
-@Serializable
 data class RechargeProduct(
     val id: String = "",
     val name: String = "",
@@ -131,7 +119,6 @@ data class RechargeProduct(
     val originalPrice: Double = 0.0,
 )
 
-@Serializable
 data class RefundProgress(
     val ctime: Long = -1L,
     val count: Int = 0,
@@ -141,14 +128,12 @@ data class RefundProgress(
     val active: Boolean get() = ctime != -1L
 }
 
-@Serializable
 data class SpendingStats(
     val today: Double = 0.0,
     val yesterday: Double = 0.0,
     val monthAverage: Double = 0.0,
 )
 
-@Serializable
 data class BillRecord(
     val id: String = "",
     val cata: Int = 0,
@@ -173,14 +158,12 @@ enum class PaletteStyle(
 
 const val DEFAULT_SEED_COLOR: Int = 0xFF6750A4.toInt()
 
-@Serializable
 data class AccountInfo(
     val img: String = "",
     val name: String = "",
     val pn: String = "",
 )
 
-@Serializable
 data class AppState(
     val account: Account = Account(),
     val devices: List<Device> = emptyList(),

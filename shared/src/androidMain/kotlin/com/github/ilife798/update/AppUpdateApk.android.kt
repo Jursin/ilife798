@@ -2,6 +2,7 @@ package com.github.ilife798.update
 
 import com.github.ilife798.ApplicationContext
 import com.github.ilife798.logDebug
+import com.github.ilife798.util.toLowerHex
 import io.ktor.client.request.prepareGet
 import io.ktor.client.statement.bodyAsChannel
 import io.ktor.http.HttpHeaders
@@ -101,7 +102,7 @@ private fun File.sha256Hex(): String? =
                 digest.update(buffer, 0, read)
             }
         }
-        digest.digest().joinToString("") { "%02x".format(it) }
+        digest.digest().toLowerHex()
     } catch (e: Exception) {
         logDebug("ILife798", "sha256Hex: ${e.message}")
         null

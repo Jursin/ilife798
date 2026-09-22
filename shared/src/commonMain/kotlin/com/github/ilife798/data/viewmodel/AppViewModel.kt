@@ -32,6 +32,7 @@ import com.github.ilife798.data.model.ScoreRecord
 import com.github.ilife798.data.model.SpendingStats
 import com.github.ilife798.data.model.ThemeMode
 import com.github.ilife798.dismissToast
+import com.github.ilife798.isIOS
 import com.github.ilife798.logDebug
 import com.github.ilife798.pay.AlipayPayResult
 import com.github.ilife798.showToast
@@ -100,7 +101,7 @@ class AppViewModel : ViewModel() {
     private var sponsorClickedAt = 0L
 
     // 检查更新（状态与流程见 UpdateController）
-    val update =
+    private val update =
         UpdateController(
             scope = viewModelScope,
             onToast = ::showToast,
@@ -109,7 +110,7 @@ class AppViewModel : ViewModel() {
         )
 
     // 设备列表与启停（见 DeviceController）
-    val device =
+    private val device =
         DeviceController(
             scope = viewModelScope,
             apiProvider = { api },
@@ -121,7 +122,7 @@ class AppViewModel : ViewModel() {
         )
 
     // 钱包与账单（见 WalletBillController）
-    val wallet =
+    private val wallet =
         WalletBillController(
             scope = viewModelScope,
             apiProvider = { api },
@@ -131,7 +132,7 @@ class AppViewModel : ViewModel() {
         )
 
     // 积分任务（见 TaskController）
-    val task =
+    private val task =
         TaskController(
             scope = viewModelScope,
             apiProvider = { api },
@@ -167,15 +168,16 @@ class AppViewModel : ViewModel() {
             val storage = AppStorage.instance
             state =
                 state.copy(
-                    dynamicColor = storage.getBoolean(StorageKeys.DYNAMIC_COLOR, true),
+                    // iOS 不支持动态取色/模糊/预测性返回：强制为平台默认值
+                    dynamicColor = storage.getBoolean(StorageKeys.DYNAMIC_COLOR, true) && !isIOS,
                     customColor = storage.getBoolean(StorageKeys.CUSTOM_COLOR, true),
                     paletteStyle =
                         PaletteStyle.entries.firstOrNull { it.name == storage.getString(StorageKeys.PALETTE_STYLE) }
                             ?: PaletteStyle.TonalSpot,
                     seedColor = storage.getInt(StorageKeys.SEED_COLOR, DEFAULT_SEED_COLOR),
                     floatingNav = storage.getBoolean(StorageKeys.FLOATING_NAV, false),
-                    appBlur = storage.getBoolean(StorageKeys.APP_BLUR, true),
-                    predictiveBackEnabled = storage.getBoolean(StorageKeys.PREDICTIVE_BACK, true),
+                    appBlur = storage.getBoolean(StorageKeys.APP_BLUR, true) && !isIOS,
+                    predictiveBackEnabled = if (isIOS) true else storage.getBoolean(StorageKeys.PREDICTIVE_BACK, true),
                     themeMode =
                         ThemeMode.entries.firstOrNull { it.name == storage.getString(StorageKeys.THEME_MODE) }
                             ?: ThemeMode.System,
@@ -571,9 +573,7 @@ class AppViewModel : ViewModel() {
         val loaded: Boolean = false,
     )
 
-    private var scoreLists by mutableStateOf(
-        ScoreFilter.entries.associateWith { ScoreListState() },
-    )
+    private var scoreLists by mutableStateOf(emptyScoreLists())
 
     var scoreFilter by mutableStateOf(ScoreFilter.All)
         private set
@@ -782,6 +782,7 @@ class AppViewModel : ViewModel() {
 
     val missions: List<MissionInfo> get() = task.missions
     val tasksRefreshing: Boolean get() = task.tasksRefreshing
+    val allTasksCompleted: Boolean get() = task.areAllTasksCompleted()
 
     fun loadMissions() = task.loadMissions()
 

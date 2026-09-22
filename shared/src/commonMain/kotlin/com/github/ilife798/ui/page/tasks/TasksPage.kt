@@ -75,19 +75,8 @@ fun TasksPage(
     }
 
     LaunchedEffect(missions) {
-        if (missions.isNotEmpty() && !viewModel.isLoading && !state.taskCompleted) {
-            val allDone =
-                missions
-                    .filter { !it.isDailySignin && it.limit > 0 && it.score > 0 }
-                    .all { it.dailyCompleted >= it.limit }
-            val signInDone =
-                missions.firstOrNull { it.isDailySignin }?.let {
-                    val weekDay = getDayOfWeek()
-                    (state.weekMask and (1 shl (weekDay - 1))) != 0
-                } ?: true
-            if (allDone && signInDone) {
-                viewModel.setTaskCompleted()
-            }
+        if (missions.isNotEmpty() && !viewModel.isLoading && !state.taskCompleted && viewModel.allTasksCompleted) {
+            viewModel.setTaskCompleted()
         }
     }
 

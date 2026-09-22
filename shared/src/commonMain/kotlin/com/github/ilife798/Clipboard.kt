@@ -6,7 +6,7 @@ expect fun copyTextToClipboard(text: String): Boolean
 // 复制文本并提示结果。
 fun copyToClipboard(
     text: String,
-    successMessage: String = "已复制",
+    successMessage: String,
 ) {
     showToast(if (copyTextToClipboard(text)) successMessage else "复制失败")
 }

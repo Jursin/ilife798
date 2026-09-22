@@ -4,6 +4,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.graphics.Shape
 import top.yukonga.miuix.kmp.blur.BlendColorEntry
 import top.yukonga.miuix.kmp.blur.BlurColors
 import top.yukonga.miuix.kmp.blur.LayerBackdrop
@@ -32,22 +33,23 @@ fun blurAppBarColor(backdrop: LayerBackdrop?): Color = if (backdrop != null) Col
 // 把内容捕获到 [backdrop]，供标题栏模糊使用；为 null 时不处理。
 fun Modifier.captureForBlur(backdrop: LayerBackdrop?): Modifier = if (backdrop != null) this.layerBackdrop(backdrop) else this
 
-// 以 [backdrop] 为源，给标题栏加上毛玻璃模糊。
+// 以 [backdrop] 为源的毛玻璃模糊，形状与混合色可按需覆盖。
 @Composable
 fun Modifier.appBarBlur(
     backdrop: LayerBackdrop?,
-    blurRadius: Float = 25f,
+    shape: Shape = RectangleShape,
+    blendColor: Color = MiuixTheme.colorScheme.surface.copy(alpha = 0.8f),
 ): Modifier {
     if (backdrop == null) return this
     return this.textureBlur(
         backdrop = backdrop,
-        shape = RectangleShape,
-        blurRadius = blurRadius,
+        shape = shape,
+        blurRadius = 25f,
         colors =
             BlurColors(
                 blendColors =
                     listOf(
-                        BlendColorEntry(MiuixTheme.colorScheme.surface.copy(alpha = 0.8f)),
+                        BlendColorEntry(blendColor),
                     ),
             ),
     )

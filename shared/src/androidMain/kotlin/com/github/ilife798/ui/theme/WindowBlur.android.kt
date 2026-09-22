@@ -17,18 +17,15 @@ import androidx.compose.ui.window.DialogWindowProvider
 import java.util.function.Consumer
 
 @Composable
-actual fun WindowBlurEffect(
-    useBlur: Boolean,
-    blurRadius: Int,
-) {
+actual fun WindowBlurEffect(useBlur: Boolean) {
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return
 
     val window = findCurrentWindow() ?: return
     val blurEnabledBySystem = isCrossWindowBlurEnabled()
 
-    DisposableEffect(window, useBlur, blurRadius, blurEnabledBySystem) {
+    DisposableEffect(window, useBlur, blurEnabledBySystem) {
         if (useBlur && blurEnabledBySystem) {
-            window.applyBlur(blurRadius)
+            window.applyBlur(30)
         } else {
             window.clearBlur()
         }

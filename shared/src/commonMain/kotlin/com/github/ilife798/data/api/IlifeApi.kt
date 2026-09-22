@@ -166,13 +166,12 @@ class IlifeApi(
     // 账号设置
     suspend fun setUseScore(
         token: String,
-        useScore: Int = 1,
         appType: String = APP_TYPE_DEVICE,
     ): DevResult {
         val response =
             client.post("${ApiConfig.baseUrl}/acc/upt") {
                 contentType(ContentType.Application.Json)
-                setBody(requestJson.encodeToString(SetUseScoreRequest(useScore)))
+                setBody(requestJson.encodeToString(SetUseScoreRequest(1)))
                 header("Authorization", token)
                 header("ApplicationType", appType)
             }
@@ -416,29 +415,27 @@ class IlifeApi(
         token: String,
         uid: String,
         adId: String,
-    ): DevResult {
-        val sign = Signer.sign(adId, token, uid)
-        val response =
-            client.post("${ApiConfig.baseUrl}/acc/score/score-send?sign=$sign&s=true") {
-                contentType(ContentType.Application.Json)
-                setBody(requestJson.encodeToString(MissionExecRequest(adId)))
-                header("Authorization", token)
-                header("ApplicationType", APP_TYPE_POINTS)
-            }
-        return parseDevResult(response.bodyAsText(), reportError = false)
-    }
+    ): DevResult = postScoreSend(token, uid, adId, requestJson.encodeToString(MissionExecRequest(adId)))
 
     suspend fun signIn(
         token: String,
         uid: String,
         weekDay: Int,
         adId: String,
+    ): DevResult = postScoreSend(token, uid, adId, requestJson.encodeToString(SignInRequest(weekDay, adId)))
+
+    // 执行任务与签到共用的 score-send 请求
+    private suspend fun postScoreSend(
+        token: String,
+        uid: String,
+        adId: String,
+        body: String,
     ): DevResult {
         val sign = Signer.sign(adId, token, uid)
         val response =
             client.post("${ApiConfig.baseUrl}/acc/score/score-send?sign=$sign&s=true") {
                 contentType(ContentType.Application.Json)
-                setBody(requestJson.encodeToString(SignInRequest(weekDay, adId)))
+                setBody(body)
                 header("Authorization", token)
                 header("ApplicationType", APP_TYPE_POINTS)
             }
@@ -448,7 +445,7 @@ class IlifeApi(
     suspend fun getScoreList(
         token: String,
         page: Int = 0,
-        size: Int = 20,
+        size: Int,
         src: Int? = null,
     ): ScoreListResult {
         val response =
@@ -485,13 +482,10 @@ class IlifeApi(
     }
 
     // 钱包与账单
-    suspend fun getWalletOwner(
-        token: String,
-        all: Boolean = true,
-    ): WalletOwnerResult {
+    suspend fun getWalletOwner(token: String): WalletOwnerResult {
         val response =
             client.get("${ApiConfig.baseUrl}/acc/wallet/owner") {
-                parameter("all", all.toString())
+                parameter("all", "true")
                 header("Authorization", token)
                 header("ApplicationType", APP_TYPE_DEVICE)
             }
@@ -515,7 +509,7 @@ class IlifeApi(
     suspend fun getWalletDetail(
         token: String,
         id: String,
-        eid: String = "",
+        eid: String,
     ): WalletAccount? {
         if (id.isEmpty()) return null
         val response =
@@ -554,8 +548,8 @@ class IlifeApi(
     suspend fun getBillList(
         token: String,
         page: Int = 0,
-        size: Int = 20,
-        status: Int = 3,
+        size: Int,
+        status: Int,
     ): BillListResult {
         val response =
             client.get("${ApiConfig.baseUrl}/bill/lst-owner") {

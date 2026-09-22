@@ -55,10 +55,7 @@ import top.yukonga.miuix.kmp.basic.NavigationRail
 import top.yukonga.miuix.kmp.basic.NavigationRailItem
 import top.yukonga.miuix.kmp.basic.VerticalDivider
 import top.yukonga.miuix.kmp.basic.rememberNavigationRailState
-import top.yukonga.miuix.kmp.blur.BlendColorEntry
-import top.yukonga.miuix.kmp.blur.BlurColors
 import top.yukonga.miuix.kmp.blur.LayerBackdrop
-import top.yukonga.miuix.kmp.blur.textureBlur
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Contacts
 import top.yukonga.miuix.kmp.icon.extended.Home
@@ -120,17 +117,10 @@ private fun NavBarContent(
             color = if (blurActive) Color.Transparent else MiuixTheme.colorScheme.surfaceContainer,
             modifier =
                 if (blurActive) {
-                    Modifier.textureBlur(
-                        backdrop = navBarBackdrop,
+                    Modifier.appBarBlur(
+                        navBarBackdrop,
                         shape = RoundedCornerShape(50.dp),
-                        blurRadius = 25f,
-                        colors =
-                            BlurColors(
-                                blendColors =
-                                    listOf(
-                                        BlendColorEntry(MiuixTheme.colorScheme.surfaceContainer.copy(alpha = 0.8f)),
-                                    ),
-                            ),
+                        blendColor = MiuixTheme.colorScheme.surfaceContainer.copy(alpha = 0.8f),
                     )
                 } else {
                     Modifier

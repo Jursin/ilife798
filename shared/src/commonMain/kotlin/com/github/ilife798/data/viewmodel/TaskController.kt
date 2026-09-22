@@ -230,6 +230,9 @@ class TaskController(
         return allDone && signInDone
     }
 
+    // 当前任务的完成判定（供 UI 使用）
+    fun areAllTasksCompleted(): Boolean = isAllTasksCompleted(missions, getState().weekMask)
+
     // 桌面快捷方式“运行积分任务”：未登录/运行中/已完成时给出提示
     fun runFromShortcut() {
         val account = getState().account

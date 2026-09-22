@@ -82,16 +82,21 @@ class WalletBillController(
     private fun currentToken(): String = getState().account.preferredToken
 
     fun reset() {
+        clearBillPaging()
+        rechargeProducts = emptyList()
+        refundProgress = null
+        spendingStats = SpendingStats()
+        lastSpendingLoadTime = 0L
+    }
+
+    // 账单分页与缓存的公共重置
+    private fun clearBillPaging() {
         billHasMore = false
         billLoadingMore = false
         billPage = 0
         billLoadToken = ""
         billStatus = BILL_STATUS
         billCache = mutableMapOf()
-        rechargeProducts = emptyList()
-        refundProgress = null
-        spendingStats = SpendingStats()
-        lastSpendingLoadTime = 0L
     }
 
     fun loadWallet(): Job? {
@@ -267,12 +272,7 @@ class WalletBillController(
 
     // 进入我的账单页：重置为默认（已付款），清空缓存后重新请求
     fun refreshBillPage() {
-        billStatus = BILL_STATUS
-        billCache = mutableMapOf()
-        billPage = 0
-        billHasMore = false
-        billLoadingMore = false
-        billLoadToken = ""
+        clearBillPaging()
         setState { it.copy(billRecords = emptyList()) }
         loadWallet()
         loadBillsNoCooldown()
