@@ -78,7 +78,7 @@ class AppViewModel : ViewModel() {
         scope: String,
         e: Exception,
     ) {
-        logDebug("ILife798", "$scope: ${e.message}")
+        logDebug("ILife798", "$scope: ${e.stackTraceToString()}")
     }
 
     private var lastScoreLoadTime = 0L
@@ -235,7 +235,6 @@ class AppViewModel : ViewModel() {
                 }
             } catch (e: Exception) {
                 logError("checkLoginStatus", e)
-                handleSessionExpired()
             }
         }
     }
@@ -359,6 +358,7 @@ class AppViewModel : ViewModel() {
                 val bytes = api.getCaptcha(key)
                 captchaImage = bytes.toImageBitmap()
             } catch (e: Exception) {
+                logError("loadCaptcha", e)
                 errorMessage = "获取图形验证码失败: ${e.message}"
             } finally {
                 isLoading = false
@@ -368,6 +368,10 @@ class AppViewModel : ViewModel() {
 
     // 登录
     var smsSent by mutableStateOf(false)
+        private set
+
+    // 发送验证码成功次数：驱动界面仅在成功后进入倒计时
+    var smsSendSuccessTick by mutableIntStateOf(0)
         private set
 
     fun sendSmsCode(
@@ -384,6 +388,7 @@ class AppViewModel : ViewModel() {
                 val code = obj.int("code", -1)
                 if (code == 0) {
                     smsSent = true
+                    smsSendSuccessTick++
                     showToast("验证码已发送")
                 } else {
                     val msg = obj.str("msg", "发送验证码失败")

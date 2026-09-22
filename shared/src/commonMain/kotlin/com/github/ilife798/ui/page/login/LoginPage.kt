@@ -13,13 +13,11 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -37,10 +35,7 @@ import com.github.ilife798.ui.component.BlurredTopAppBar
 import com.github.ilife798.ui.component.PageScrollColumn
 import com.github.ilife798.ui.theme.primaryButtonColors
 import com.github.ilife798.ui.theme.rememberAppBlurBackdrop
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
-import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.Icon
@@ -78,16 +73,8 @@ fun LoginPage(
     val keyboardController = LocalSoftwareKeyboardController.current
     val focusManager = LocalFocusManager.current
 
-    // 倒计时随页面离开而取消
+    // 倒计时状态（协程由 LaunchedEffect 承载，随页面离开自动取消）
     var smsCountdown by remember { mutableIntStateOf(0) }
-    var countdownJob by remember { mutableStateOf<Job?>(null) }
-    val scope = rememberCoroutineScope()
-
-    DisposableEffect(Unit) {
-        onDispose {
-            countdownJob?.cancel()
-        }
-    }
 
     val loginDone = if (isAlipay) account.pointsLoginDone else account.appToken.isNotEmpty()
 
@@ -112,6 +99,17 @@ fun LoginPage(
                 phone = TextFieldValue(text = saved, selection = TextRange(saved.length))
             }
         }
+    }
+
+    val enterTick = remember { viewModel.smsSendSuccessTick }
+    LaunchedEffect(viewModel.smsSendSuccessTick) {
+        if (viewModel.smsSendSuccessTick <= enterTick) return@LaunchedEffect
+        smsCountdown = 60
+        while (smsCountdown > 0) {
+            delay(1000.milliseconds)
+            smsCountdown--
+        }
+        smsCountdown = 0
     }
 
     // 进入页面自动聚焦手机号输入框并弹出键盘
@@ -244,16 +242,6 @@ fun LoginPage(
                     modifier = Modifier.width(120.dp),
                     onClick = {
                         viewModel.sendSmsCode(phone.text, graphCode)
-                        countdownJob?.cancel()
-                        smsCountdown = 60
-                        countdownJob =
-                            scope.launch {
-                                while (smsCountdown > 0 && isActive) {
-                                    delay(1000.milliseconds)
-                                    smsCountdown--
-                                }
-                                smsCountdown = 0
-                            }
                     },
                     enabled = phone.text.length == 11 && graphCode.isNotBlank() && smsCountdown <= 0,
                     colors = primaryButtonColors(dynamicColor),

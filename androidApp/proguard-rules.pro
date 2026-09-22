@@ -1,3 +1,6 @@
+# 保留堆栈行号与文件名，便于定位 release 崩溃/异常
+-keepattributes SourceFile,LineNumberTable
+
 # Ktor
 # Keep ServiceLoader implementations (OkHttp engine discovery + kotlinx-json provider).
 -keep class io.ktor.client.engine.okhttp.*EngineContainer { *; }
