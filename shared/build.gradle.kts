@@ -18,17 +18,6 @@ aboutLibraries {
     }
 }
 
-repositories {
-    google {
-        mavenContent {
-            includeGroupByRegex("androidx(\\..*)?")
-            includeGroupByRegex("com\\.android(\\..*)?")
-            includeGroupByRegex("com\\.google(\\..*)?")
-        }
-    }
-    mavenCentral()
-}
-
 compose.resources {
     publicResClass = true
     packageOfResClass = "com.github.ilife798.shared.resources"

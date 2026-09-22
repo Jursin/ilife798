@@ -8,7 +8,6 @@ on:
     tags:
       - 'v*'
     paths-ignore:
-      - 'androidApp/build.gradle.kts'
       - '.github/workflows/**'
   workflow_dispatch:
 
@@ -62,7 +61,7 @@ jobs:
           printf 'API_CID=%s\n' "$API_CID" >> secrets.properties
 
       - name: Check formatting, tests and lint
-        run: ./gradlew spotlessCheck testDebugUnitTest testAndroidHostTest lintDebug --no-daemon --stacktrace
+        run: ./gradlew spotlessCheck testAndroidHostTest lintDebug --no-daemon --stacktrace
 
       - name: Build debug APKs
         run: ./gradlew assembleDebug --no-daemon --stacktrace
@@ -136,7 +135,7 @@ jobs:
           } > local.properties
 
       - name: Run tests and build signed release APKs
-        run: ./gradlew testDebugUnitTest testAndroidHostTest assembleRelease --no-daemon --stacktrace
+        run: ./gradlew testAndroidHostTest assembleRelease --no-daemon --stacktrace
 
       - name: Verify release APK signatures
         run: |

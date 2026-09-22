@@ -34,7 +34,7 @@ fun App() {
         if (viewModel.sponsorPromptCount > 0) {
             SponsorDialog(
                 appBlur = state.appBlur,
-                message = "您已启动应用 ${viewModel.sponsorPromptCount} 次了，考虑赞助支持一下作者吗？开发不易，多少都行，让我勉强回一部分本。",
+                message = "您已启动应用 ${viewModel.sponsorPromptCount} 次了，考虑赞助支持一下作者吗？",
                 onDismiss = { viewModel.dismissSponsor() },
                 onNeverRemind = { viewModel.neverRemindSponsor() },
                 onSponsor = { viewModel.openSponsor() },

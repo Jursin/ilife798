@@ -14,5 +14,18 @@ pluginManagement {
     }
 }
 
+dependencyResolutionManagement {
+    repositories {
+        google {
+            mavenContent {
+                includeGroupByRegex("androidx(\\..*)?")
+                includeGroupByRegex("com\\.android(\\..*)?")
+                includeGroupByRegex("com\\.google(\\..*)?")
+            }
+        }
+        mavenCentral()
+    }
+}
+
 include(":androidApp")
 include(":shared")

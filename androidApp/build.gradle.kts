@@ -8,17 +8,6 @@ plugins {
     alias(libs.plugins.spotless)
 }
 
-repositories {
-    google {
-        mavenContent {
-            includeGroupByRegex("androidx(\\..*)?")
-            includeGroupByRegex("com\\.android(\\..*)?")
-            includeGroupByRegex("com\\.google(\\..*)?")
-        }
-    }
-    mavenCentral()
-}
-
 kotlin {
     compilerOptions {
         jvmTarget = JvmTarget.JVM_21

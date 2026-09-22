@@ -31,7 +31,6 @@
 	<key>LSApplicationQueriesSchemes</key>
 	<array>
 		<string>alipays</string>
-		<string>alipay</string>
 	</array>
 	<key>UILaunchScreen</key>
 	<dict/>

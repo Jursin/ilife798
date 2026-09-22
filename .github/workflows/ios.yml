@@ -115,6 +115,11 @@ jobs:
           version_name="$(sed -n 's/^[[:space:]]*versionName = "\(.*\)"/\1/p' "$APP_MODULE/build.gradle.kts" | head -n 1)"
           test "$GITHUB_REF_NAME" = "v$version_name"
 
+      - name: Verify release tag matches iOS version
+        run: |
+          marketing="$(sed -n 's/^MARKETING_VERSION = //p' iosApp/Configuration/Config.xcconfig | tr -d '[:space:]')"
+          test "$GITHUB_REF_NAME" = "v$marketing"
+
       - name: Generate secrets.properties
         env:
           API_GATEWAY: ${{ secrets.API_GATEWAY }}

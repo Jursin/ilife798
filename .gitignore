@@ -28,11 +28,6 @@ secrets.properties
 DerivedData/
 xcuserdata/
 *.xcuserstate
-Pods/
-Podfile.lock
-
-# Node
-node_modules/
 
 # Misc
 .DS_Store
