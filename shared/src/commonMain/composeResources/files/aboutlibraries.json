@@ -2054,6 +2054,29 @@
             ]
         },
         {
+            "uniqueId": "com.charleskorn.kaml:kaml",
+            "artifactVersion": "0.79.0",
+            "name": "kaml",
+            "description": "YAML support for kotlinx.serialization",
+            "website": "https://github.com/charleskorn/kaml",
+            "developers": [
+                {
+                    "name": "Charles Korn"
+                }
+            ],
+            "scm": {
+                "connection": "scm:git:git://github.com/charleskorn/kaml.git",
+                "developerConnection": "scm:git:ssh://github.com:charleskorn/kaml.git",
+                "url": "https://github.com/charleskorn/kaml"
+            },
+            "licenses": [
+                "Apache-2.0"
+            ],
+            "funding": [
+                
+            ]
+        },
+        {
             "uniqueId": "com.google.accompanist:accompanist-drawablepainter",
             "artifactVersion": "0.37.3",
             "name": "Accompanist Drawable Painter library",
@@ -2297,7 +2320,7 @@
         },
         {
             "uniqueId": "com.materialkolor:material-color-utilities",
-            "artifactVersion": "5.0.0",
+            "artifactVersion": "5.0.1",
             "name": "MaterialKolor",
             "description": "Material You dynamic color for Compose Multiplatform",
             "website": "https://github.com/jordond/materialkolor",
@@ -2366,19 +2389,19 @@
         },
         {
             "uniqueId": "com.squareup.okhttp3:okhttp",
-            "artifactVersion": "5.3.2",
+            "artifactVersion": "5.5.0",
             "name": "okhttp",
             "description": "Square\u2019s meticulous HTTP client for Java and Kotlin.",
-            "website": "https://square.github.io/okhttp/",
+            "website": "https://lysine.dev/okhttp/",
             "developers": [
                 {
                     "name": "Square, Inc."
                 }
             ],
             "scm": {
-                "connection": "scm:git:https://github.com/square/okhttp.git",
-                "developerConnection": "scm:git:ssh://git@github.com/square/okhttp.git",
-                "url": "https://github.com/square/okhttp"
+                "connection": "scm:git:https://github.com/lysine-dev/okhttp.git",
+                "developerConnection": "scm:git:ssh://git@github.com/lysine-dev/okhttp.git",
+                "url": "https://github.com/lysine-dev/okhttp"
             },
             "licenses": [
                 "Apache-2.0"
@@ -2389,7 +2412,7 @@
         },
         {
             "uniqueId": "com.squareup.okio:okio",
-            "artifactVersion": "3.18.1",
+            "artifactVersion": "3.18.2",
             "name": "okio",
             "description": "A modern I/O library for Android, Java, and Kotlin Multiplatform.",
             "website": "https://github.com/lysine-dev/okio/",
@@ -2435,7 +2458,7 @@
         },
         {
             "uniqueId": "io.coil-kt.coil3:coil",
-            "artifactVersion": "3.6.2",
+            "artifactVersion": "3.6.3",
             "name": "coil",
             "description": "An image loading library for Android and Compose Multiplatform.",
             "website": "https://github.com/coil-kt/coil",
@@ -2458,7 +2481,7 @@
         },
         {
             "uniqueId": "io.coil-kt.coil3:coil-compose",
-            "artifactVersion": "3.6.2",
+            "artifactVersion": "3.6.3",
             "name": "coil-compose",
             "description": "An image loading library for Android and Compose Multiplatform.",
             "website": "https://github.com/coil-kt/coil",
@@ -2481,7 +2504,7 @@
         },
         {
             "uniqueId": "io.coil-kt.coil3:coil-compose-core",
-            "artifactVersion": "3.6.2",
+            "artifactVersion": "3.6.3",
             "name": "coil-compose-core",
             "description": "An image loading library for Android and Compose Multiplatform.",
             "website": "https://github.com/coil-kt/coil",
@@ -2504,7 +2527,7 @@
         },
         {
             "uniqueId": "io.coil-kt.coil3:coil-core",
-            "artifactVersion": "3.6.2",
+            "artifactVersion": "3.6.3",
             "name": "coil-core",
             "description": "An image loading library for Android and Compose Multiplatform.",
             "website": "https://github.com/coil-kt/coil",
@@ -2527,7 +2550,7 @@
         },
         {
             "uniqueId": "io.coil-kt.coil3:coil-network-core",
-            "artifactVersion": "3.6.2",
+            "artifactVersion": "3.6.3",
             "name": "coil-network-core",
             "description": "An image loading library for Android and Compose Multiplatform.",
             "website": "https://github.com/coil-kt/coil",
@@ -2550,7 +2573,7 @@
         },
         {
             "uniqueId": "io.coil-kt.coil3:coil-network-ktor3",
-            "artifactVersion": "3.6.2",
+            "artifactVersion": "3.6.3",
             "name": "coil-network-ktor3",
             "description": "An image loading library for Android and Compose Multiplatform.",
             "website": "https://github.com/coil-kt/coil",
@@ -2573,7 +2596,7 @@
         },
         {
             "uniqueId": "io.ktor:ktor-client-content-negotiation",
-            "artifactVersion": "3.5.2",
+            "artifactVersion": "3.6.0",
             "name": "ktor-client-content-negotiation",
             "description": "Ktor is a framework for quickly creating web applications in Kotlin with minimal effort.",
             "website": "https://github.com/ktorio/ktor",
@@ -2595,7 +2618,7 @@
         },
         {
             "uniqueId": "io.ktor:ktor-client-core",
-            "artifactVersion": "3.5.2",
+            "artifactVersion": "3.6.0",
             "name": "ktor-client-core",
             "description": "Ktor is a framework for quickly creating web applications in Kotlin with minimal effort.",
             "website": "https://github.com/ktorio/ktor",
@@ -2617,7 +2640,7 @@
         },
         {
             "uniqueId": "io.ktor:ktor-client-darwin",
-            "artifactVersion": "3.5.2",
+            "artifactVersion": "3.6.0",
             "name": "ktor-client-darwin",
             "description": "Ktor is a framework for quickly creating web applications in Kotlin with minimal effort.",
             "website": "https://github.com/ktorio/ktor",
@@ -2639,7 +2662,7 @@
         },
         {
             "uniqueId": "io.ktor:ktor-client-okhttp",
-            "artifactVersion": "3.5.2",
+            "artifactVersion": "3.6.0",
             "name": "ktor-client-okhttp",
             "description": "Ktor is a framework for quickly creating web applications in Kotlin with minimal effort.",
             "website": "https://github.com/ktorio/ktor",
@@ -2661,7 +2684,7 @@
         },
         {
             "uniqueId": "io.ktor:ktor-events",
-            "artifactVersion": "3.5.2",
+            "artifactVersion": "3.6.0",
             "name": "ktor-events",
             "description": "Ktor is a framework for quickly creating web applications in Kotlin with minimal effort.",
             "website": "https://github.com/ktorio/ktor",
@@ -2683,7 +2706,7 @@
         },
         {
             "uniqueId": "io.ktor:ktor-http",
-            "artifactVersion": "3.5.2",
+            "artifactVersion": "3.6.0",
             "name": "ktor-http",
             "description": "Ktor is a framework for quickly creating web applications in Kotlin with minimal effort.",
             "website": "https://github.com/ktorio/ktor",
@@ -2705,7 +2728,7 @@
         },
         {
             "uniqueId": "io.ktor:ktor-http-cio",
-            "artifactVersion": "3.5.2",
+            "artifactVersion": "3.6.0",
             "name": "ktor-http-cio",
             "description": "Ktor is a framework for quickly creating web applications in Kotlin with minimal effort.",
             "website": "https://github.com/ktorio/ktor",
@@ -2727,7 +2750,7 @@
         },
         {
             "uniqueId": "io.ktor:ktor-io",
-            "artifactVersion": "3.5.2",
+            "artifactVersion": "3.6.0",
             "name": "ktor-io",
             "description": "Ktor is a framework for quickly creating web applications in Kotlin with minimal effort.",
             "website": "https://github.com/ktorio/ktor",
@@ -2749,7 +2772,7 @@
         },
         {
             "uniqueId": "io.ktor:ktor-network",
-            "artifactVersion": "3.5.2",
+            "artifactVersion": "3.6.0",
             "name": "ktor-network",
             "description": "Ktor is a framework for quickly creating web applications in Kotlin with minimal effort.",
             "website": "https://github.com/ktorio/ktor",
@@ -2771,7 +2794,7 @@
         },
         {
             "uniqueId": "io.ktor:ktor-network-tls",
-            "artifactVersion": "3.5.2",
+            "artifactVersion": "3.6.0",
             "name": "ktor-network-tls",
             "description": "Ktor is a framework for quickly creating web applications in Kotlin with minimal effort.",
             "website": "https://github.com/ktorio/ktor",
@@ -2792,8 +2815,30 @@
             ]
         },
         {
+            "uniqueId": "io.ktor:ktor-openapi-schema",
+            "artifactVersion": "3.6.0",
+            "name": "ktor-openapi-schema",
+            "description": "Ktor is a framework for quickly creating web applications in Kotlin with minimal effort.",
+            "website": "https://github.com/ktorio/ktor",
+            "developers": [
+                {
+                    "name": "Jetbrains Team",
+                    "organisationUrl": "https://www.jetbrains.com"
+                }
+            ],
+            "scm": {
+                "url": "https://github.com/ktorio/ktor.git"
+            },
+            "licenses": [
+                "Apache-2.0"
+            ],
+            "funding": [
+                
+            ]
+        },
+        {
             "uniqueId": "io.ktor:ktor-serialization",
-            "artifactVersion": "3.5.2",
+            "artifactVersion": "3.6.0",
             "name": "ktor-serialization",
             "description": "Ktor is a framework for quickly creating web applications in Kotlin with minimal effort.",
             "website": "https://github.com/ktorio/ktor",
@@ -2815,7 +2860,7 @@
         },
         {
             "uniqueId": "io.ktor:ktor-serialization-kotlinx",
-            "artifactVersion": "3.5.2",
+            "artifactVersion": "3.6.0",
             "name": "ktor-serialization-kotlinx",
             "description": "Ktor is a framework for quickly creating web applications in Kotlin with minimal effort.",
             "website": "https://github.com/ktorio/ktor",
@@ -2837,7 +2882,7 @@
         },
         {
             "uniqueId": "io.ktor:ktor-serialization-kotlinx-json",
-            "artifactVersion": "3.5.2",
+            "artifactVersion": "3.6.0",
             "name": "ktor-serialization-kotlinx-json",
             "description": "Ktor is a framework for quickly creating web applications in Kotlin with minimal effort.",
             "website": "https://github.com/ktorio/ktor",
@@ -2859,7 +2904,7 @@
         },
         {
             "uniqueId": "io.ktor:ktor-sse",
-            "artifactVersion": "3.5.2",
+            "artifactVersion": "3.6.0",
             "name": "ktor-sse",
             "description": "Ktor is a framework for quickly creating web applications in Kotlin with minimal effort.",
             "website": "https://github.com/ktorio/ktor",
@@ -2881,7 +2926,7 @@
         },
         {
             "uniqueId": "io.ktor:ktor-utils",
-            "artifactVersion": "3.5.2",
+            "artifactVersion": "3.6.0",
             "name": "ktor-utils",
             "description": "Ktor is a framework for quickly creating web applications in Kotlin with minimal effort.",
             "website": "https://github.com/ktorio/ktor",
@@ -2903,7 +2948,7 @@
         },
         {
             "uniqueId": "io.ktor:ktor-websocket-serialization",
-            "artifactVersion": "3.5.2",
+            "artifactVersion": "3.6.0",
             "name": "ktor-websocket-serialization",
             "description": "Ktor is a framework for quickly creating web applications in Kotlin with minimal effort.",
             "website": "https://github.com/ktorio/ktor",
@@ -2925,7 +2970,7 @@
         },
         {
             "uniqueId": "io.ktor:ktor-websockets",
-            "artifactVersion": "3.5.2",
+            "artifactVersion": "3.6.0",
             "name": "ktor-websockets",
             "description": "Ktor is a framework for quickly creating web applications in Kotlin with minimal effort.",
             "website": "https://github.com/ktorio/ktor",
@@ -2937,6 +2982,32 @@
             ],
             "scm": {
                 "url": "https://github.com/ktorio/ktor.git"
+            },
+            "licenses": [
+                "Apache-2.0"
+            ],
+            "funding": [
+                
+            ]
+        },
+        {
+            "uniqueId": "it.krzeminski:snakeyaml-engine-kmp",
+            "artifactVersion": "3.1.1",
+            "name": "SnakeYAML Engine KMP",
+            "description": "SnakeYAML Engine KMP is a YAML 1.2 processor for Kotlin Multiplatform",
+            "website": "https://github.com/krzema12/snakeyaml-engine-kmp/",
+            "developers": [
+                {
+                    
+                },
+                {
+                    "name": "Piotr Krzemi\u0144ski"
+                }
+            ],
+            "scm": {
+                "connection": "scm:git:https://github.com/krzema12/snakeyaml-engine-kmp/",
+                "developerConnection": "scm:git:https://github.com/krzema12/",
+                "url": "https://github.com/krzema12/snakeyaml-engine-kmp"
             },
             "licenses": [
                 "Apache-2.0"
@@ -2992,6 +3063,35 @@
             ],
             "scm": {
                 "url": "http://code.google.com/p/atinject/source/checkout"
+            },
+            "licenses": [
+                "Apache-2.0"
+            ],
+            "funding": [
+                
+            ]
+        },
+        {
+            "uniqueId": "net.thauvin.erik.urlencoder:urlencoder-lib",
+            "artifactVersion": "1.6.0",
+            "name": "UrlEncoder for Kotlin Multiplatform",
+            "description": "A simple defensive library to encode/decode URL components",
+            "website": "https://github.com/ethauvin/urlencoder",
+            "developers": [
+                {
+                    "name": "Erik C. Thauvin"
+                },
+                {
+                    "name": "Adam"
+                },
+                {
+                    "name": "Geert Bevin"
+                }
+            ],
+            "scm": {
+                "connection": "scm:git://github.com/ethauvin/urlencoder.git",
+                "developerConnection": "scm:git@github.com:ethauvin/urlencoder.git",
+                "url": "https://github.com/ethauvin/urlencoder"
             },
             "licenses": [
                 "Apache-2.0"
@@ -3903,6 +4003,28 @@
             ]
         },
         {
+            "uniqueId": "org.jetbrains.kotlinx:kotlinx-datetime",
+            "artifactVersion": "0.8.0-0.6.x-compat",
+            "name": "kotlinx-datetime",
+            "description": "Kotlin Datetime Library",
+            "website": "https://github.com/Kotlin/kotlinx-datetime",
+            "developers": [
+                {
+                    "name": "JetBrains Team",
+                    "organisationUrl": "https://www.jetbrains.com"
+                }
+            ],
+            "scm": {
+                "url": "https://github.com/Kotlin/kotlinx-datetime"
+            },
+            "licenses": [
+                "Apache-2.0"
+            ],
+            "funding": [
+                
+            ]
+        },
+        {
             "uniqueId": "org.jetbrains.kotlinx:kotlinx-io-bytestring",
             "artifactVersion": "0.9.1",
             "name": "kotlinx-io-bytestring",
@@ -4129,7 +4251,7 @@
         },
         {
             "uniqueId": "org.slf4j:slf4j-api",
-            "artifactVersion": "2.0.18",
+            "artifactVersion": "2.0.19",
             "name": "SLF4J API Module",
             "description": "The slf4j API",
             "website": "http://www.slf4j.org",
@@ -4155,7 +4277,7 @@
         },
         {
             "uniqueId": "top.yukonga.miuix.kmp:miuix-blur",
-            "artifactVersion": "0.9.4-rc01",
+            "artifactVersion": "0.9.4",
             "name": "miuix-blur",
             "description": "Blur effect library for Miuix",
             "website": "https://github.com/compose-miuix-ui/miuix",
@@ -4177,7 +4299,7 @@
         },
         {
             "uniqueId": "top.yukonga.miuix.kmp:miuix-core",
-            "artifactVersion": "0.9.4-rc01",
+            "artifactVersion": "0.9.4",
             "name": "miuix-core",
             "description": "Core utilities for Miuix",
             "website": "https://github.com/compose-miuix-ui/miuix",
@@ -4199,7 +4321,7 @@
         },
         {
             "uniqueId": "top.yukonga.miuix.kmp:miuix-icons",
-            "artifactVersion": "0.9.4-rc01",
+            "artifactVersion": "0.9.4",
             "name": "miuix-icons",
             "description": "Extended icon library for Miuix",
             "website": "https://github.com/compose-miuix-ui/miuix",
@@ -4221,7 +4343,7 @@
         },
         {
             "uniqueId": "top.yukonga.miuix.kmp:miuix-nav",
-            "artifactVersion": "0.9.4-rc01",
+            "artifactVersion": "0.9.4",
             "name": "miuix-nav",
             "description": "Self-contained navigation runtime for Miuix",
             "website": "https://github.com/compose-miuix-ui/miuix",
@@ -4243,7 +4365,7 @@
         },
         {
             "uniqueId": "top.yukonga.miuix.kmp:miuix-preference",
-            "artifactVersion": "0.9.4-rc01",
+            "artifactVersion": "0.9.4",
             "name": "miuix-preference",
             "description": "Preference components for Miuix",
             "website": "https://github.com/compose-miuix-ui/miuix",
@@ -4265,7 +4387,7 @@
         },
         {
             "uniqueId": "top.yukonga.miuix.kmp:miuix-shader",
-            "artifactVersion": "0.9.4-rc01",
+            "artifactVersion": "0.9.4",
             "name": "miuix-shader",
             "description": "Runtime shader abstraction for Miuix",
             "website": "https://github.com/compose-miuix-ui/miuix",
@@ -4287,7 +4409,7 @@
         },
         {
             "uniqueId": "top.yukonga.miuix.kmp:miuix-squircle",
-            "artifactVersion": "0.9.4-rc01",
+            "artifactVersion": "0.9.4",
             "name": "miuix-squircle",
             "description": "Squircle corner library for Miuix",
             "website": "https://github.com/compose-miuix-ui/miuix",
@@ -4309,7 +4431,7 @@
         },
         {
             "uniqueId": "top.yukonga.miuix.kmp:miuix-ui",
-            "artifactVersion": "0.9.4-rc01",
+            "artifactVersion": "0.9.4",
             "name": "miuix-ui",
             "description": "A UI library for Compose Multiplatform",
             "website": "https://github.com/compose-miuix-ui/miuix",
