@@ -32,6 +32,7 @@ import com.github.ilife798.data.model.ThemeMode
 import com.github.ilife798.data.viewmodel.AppViewModel
 import com.github.ilife798.getAppVersion
 import com.github.ilife798.getAppVersionCode
+import com.github.ilife798.isIOS
 import com.github.ilife798.showToast
 import com.github.ilife798.ui.component.DisclaimerDialog
 import com.github.ilife798.ui.component.SwitchPreference
@@ -86,7 +87,7 @@ internal fun SettingsSection(
                     viewModel.setThemeMode(mode)
                 },
             )
-            if (isRuntimeShaderSupported()) {
+            if (!isIOS && isRuntimeShaderSupported()) {
                 SwitchPreference(
                     title = "模糊效果",
                     summary = "为顶栏、底栏、对话框添加模糊效果",
@@ -94,29 +95,33 @@ internal fun SettingsSection(
                     onCheckedChange = { viewModel.setAppBlur(it) },
                 )
             }
-            SwitchPreference(
-                title = "预测性返回动画",
-                summary = "返回滑动前提前预览即将跳转至的界面",
-                checked = state.predictiveBackEnabled,
-                onCheckedChange = { viewModel.setPredictiveBackEnabled(it) },
-            )
+            if (!isIOS) {
+                SwitchPreference(
+                    title = "预测性返回动画",
+                    summary = "返回滑动前提前预览即将跳转至的界面",
+                    checked = state.predictiveBackEnabled,
+                    onCheckedChange = { viewModel.setPredictiveBackEnabled(it) },
+                )
+            }
             SwitchPreference(
                 title = "自定义颜色",
                 summary = "自定义应用主题配色方案",
                 checked = state.customColor,
                 onCheckedChange = { viewModel.setCustomColor(it) },
             )
-            AnimatedVisibility(
-                visible = state.customColor,
-                enter = fadeIn() + expandVertically(),
-                exit = fadeOut() + shrinkVertically(),
-            ) {
-                SwitchPreference(
-                    title = "动态取色",
-                    summary = "基于系统壁纸颜色生成配色方案",
-                    checked = state.dynamicColor,
-                    onCheckedChange = { viewModel.setDynamicColor(it) },
-                )
+            if (!isIOS) {
+                AnimatedVisibility(
+                    visible = state.customColor,
+                    enter = fadeIn() + expandVertically(),
+                    exit = fadeOut() + shrinkVertically(),
+                ) {
+                    SwitchPreference(
+                        title = "动态取色",
+                        summary = "基于系统壁纸颜色生成配色方案",
+                        checked = state.dynamicColor,
+                        onCheckedChange = { viewModel.setDynamicColor(it) },
+                    )
+                }
             }
             AnimatedVisibility(
                 visible = state.customColor,

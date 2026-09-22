@@ -29,6 +29,7 @@ import com.github.ilife798.DeviceTileResult
 import com.github.ilife798.copyToClipboard
 import com.github.ilife798.data.model.HomeDeviceType
 import com.github.ilife798.data.viewmodel.AppViewModel
+import com.github.ilife798.isIOS
 import com.github.ilife798.showToast
 import com.github.ilife798.ui.component.AppPullToRefresh
 import com.github.ilife798.ui.component.BlurredTopAppBar
@@ -275,8 +276,10 @@ private fun DeviceCard(
                             removeDeviceName = device.name.ifEmpty { device.id }
                         },
                         onLongPress = {
-                            tileDeviceId = device.id
-                            tileDeviceName = device.name.ifEmpty { device.id }
+                            if (!isIOS) {
+                                tileDeviceId = device.id
+                                tileDeviceName = device.name.ifEmpty { device.id }
+                            }
                         },
                     )
                 }
@@ -284,7 +287,7 @@ private fun DeviceCard(
         }
     }
 
-    if (devices.isNotEmpty() && !viewModel.homeTileCreated) {
+    if (!isIOS && devices.isNotEmpty() && !viewModel.homeTileCreated) {
         Card(
             modifier = Modifier.fillMaxWidth(),
             colors =
