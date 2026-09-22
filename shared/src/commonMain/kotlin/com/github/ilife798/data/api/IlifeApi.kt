@@ -9,6 +9,7 @@ import com.github.ilife798.data.model.RefundProgress
 import com.github.ilife798.data.model.WalletAccount
 import com.github.ilife798.util.currentTimeMillis
 import io.ktor.client.HttpClient
+import io.ktor.client.request.HttpRequestBuilder
 import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.request.parameter
@@ -34,6 +35,28 @@ class IlifeApi(
 
     // 请求体序列化：保留默认值字段，保证与服务端约定一致
     private val requestJson = Json { encodeDefaults = true }
+
+    // 统一拼接 baseUrl 的请求入口；两侧斜杠归一化，兼容 baseUrl/path 带不带 "/"
+    private fun apiUrl(path: String): String = ApiConfig.baseUrl.trimEnd('/') + "/" + path.trimStart('/')
+
+    private suspend fun HttpClient.apiGet(
+        path: String,
+        block: HttpRequestBuilder.() -> Unit,
+    ): HttpResponse = get(apiUrl(path), block)
+
+    private suspend fun HttpClient.apiPost(
+        path: String,
+        block: HttpRequestBuilder.() -> Unit,
+    ): HttpResponse = post(apiUrl(path), block)
+
+    // 鉴权与平台标识请求头
+    private fun HttpRequestBuilder.apiHeaders(
+        token: String,
+        appType: String,
+    ) {
+        header("Authorization", token)
+        header("ApplicationType", appType)
+    }
 
     // 服务端在登录态失效时对所有需鉴权接口返回 code = -99
     var onSessionExpired: (() -> Unit)? = null
@@ -71,7 +94,7 @@ class IlifeApi(
     suspend fun getCaptcha(key: String): ByteArray {
         val timestamp = currentTimeMillis()
         val response =
-            client.get("${ApiConfig.baseUrl}/captcha/") {
+            client.apiGet("/captcha/") {
                 parameter("s", key)
                 parameter("r", timestamp)
             }
@@ -91,7 +114,7 @@ class IlifeApi(
     ): String =
         try {
             val response =
-                client.post("${ApiConfig.baseUrl}/acc/login/code") {
+                client.apiPost("acc/login/code") {
                     contentType(ContentType.Application.Json)
                     setBody(requestJson.encodeToString(SmsCodeRequest(phone, graphCode, captchaKey)))
                 }
@@ -107,7 +130,7 @@ class IlifeApi(
     ): LoginResult {
         val appType = if (isAlipay) APP_TYPE_POINTS else APP_TYPE_DEVICE
         val response =
-            client.post("${ApiConfig.baseUrl}/acc/login") {
+            client.apiPost("acc/login") {
                 contentType(ContentType.Application.Json)
                 setBody(requestJson.encodeToString(LoginRequest(authCode = smsCode, un = phone, cid = ApiConfig.cid)))
                 header("ApplicationType", appType)
@@ -127,9 +150,8 @@ class IlifeApi(
         notifyExpiry: Boolean = true,
     ): AccountInfoDto? {
         val response =
-            client.get("${ApiConfig.baseUrl}/ui/app/master") {
-                header("Authorization", token)
-                header("ApplicationType", APP_TYPE_DEVICE)
+            client.apiGet("ui/app/master") {
+                apiHeaders(token, APP_TYPE_DEVICE)
             }
         val body = bodyJson(response, notifyExpiry, reportError = false)
         val account = body.obj("data")?.obj("account") ?: return null
@@ -152,9 +174,8 @@ class IlifeApi(
         val mainValid =
             try {
                 val response =
-                    client.get("${ApiConfig.baseUrl}/acc/score/mission-lst") {
-                        header("Authorization", token)
-                        header("ApplicationType", APP_TYPE_POINTS)
+                    client.apiGet("/acc/score/mission-lst") {
+                        apiHeaders(token, APP_TYPE_POINTS)
                     }
                 bodyJson(response, notifyExpiry = false, reportError = false).intOrNull("code") == 0
             } catch (_: Exception) {
@@ -169,11 +190,10 @@ class IlifeApi(
         appType: String = APP_TYPE_DEVICE,
     ): DevResult {
         val response =
-            client.post("${ApiConfig.baseUrl}/acc/upt") {
+            client.apiPost("acc/upt") {
                 contentType(ContentType.Application.Json)
                 setBody(requestJson.encodeToString(SetUseScoreRequest(1)))
-                header("Authorization", token)
-                header("ApplicationType", appType)
+                apiHeaders(token, appType)
             }
         return parseDevResult(response.bodyAsText(), reportError = false)
     }
@@ -181,9 +201,8 @@ class IlifeApi(
     // 设备
     suspend fun getMasterDevices(token: String): MasterResult {
         val response =
-            client.get("${ApiConfig.baseUrl}/ui/app/master") {
-                header("Authorization", token)
-                header("ApplicationType", APP_TYPE_DEVICE)
+            client.apiGet("ui/app/master") {
+                apiHeaders(token, APP_TYPE_DEVICE)
             }
         val body = bodyJson(response, reportError = false)
         val data = body.obj("data") ?: return MasterResult()
@@ -214,15 +233,14 @@ class IlifeApi(
         reportError: Boolean = true,
     ): DevResult {
         val response =
-            client.get("${ApiConfig.baseUrl}/dev/start") {
+            client.apiGet("dev/start") {
                 parameter("did", did)
                 parameter("upgrade", "true")
                 parameter("ptype", ptype.toString())
                 parameter("args", args)
                 parameter("rcp", "false")
                 parameter("cnt", "1")
-                header("Authorization", token)
-                header("ApplicationType", appType)
+                apiHeaders(token, appType)
             }
         return parseDevResult(response.bodyAsText(), reportError)
     }
@@ -233,10 +251,9 @@ class IlifeApi(
         appType: String = APP_TYPE_DEVICE,
     ): DevResult {
         val response =
-            client.get("${ApiConfig.baseUrl}/dev/end") {
+            client.apiGet("dev/end") {
                 parameter("did", did)
-                header("Authorization", token)
-                header("ApplicationType", appType)
+                apiHeaders(token, appType)
             }
         return parseDevResult(response.bodyAsText())
     }
@@ -247,11 +264,10 @@ class IlifeApi(
         remove: Boolean,
     ): DevResult {
         val response =
-            client.get("${ApiConfig.baseUrl}/dev/favo") {
+            client.apiGet("dev/favo") {
                 parameter("did", did)
                 parameter("remove", if (remove) "1" else "0")
-                header("Authorization", token)
-                header("ApplicationType", APP_TYPE_DEVICE)
+                apiHeaders(token, APP_TYPE_DEVICE)
             }
         return parseDevResult(response.bodyAsText())
     }
@@ -262,10 +278,9 @@ class IlifeApi(
         id: String,
     ): QrUseResult {
         val response =
-            client.get("${ApiConfig.baseUrl}/qr/use") {
+            client.apiGet("qr/use") {
                 parameter("id", id)
-                header("Authorization", token)
-                header("ApplicationType", APP_TYPE_DEVICE)
+                apiHeaders(token, APP_TYPE_DEVICE)
             }
         val body = bodyJson(response)
         val code = body.int("code", -1)
@@ -281,11 +296,10 @@ class IlifeApi(
         appType: String = APP_TYPE_DEVICE,
     ): DevStatusResult? {
         val response =
-            client.get("${ApiConfig.baseUrl}/ui/app/dev/status") {
+            client.apiGet("ui/app/dev/status") {
                 parameter("did", did)
                 parameter("more", "false")
-                header("Authorization", token)
-                header("ApplicationType", appType)
+                apiHeaders(token, appType)
             }
         val body = bodyJson(response, reportError = false)
         if (body.intOrNull("code") != 0) return null
@@ -301,11 +315,10 @@ class IlifeApi(
         appType: String = APP_TYPE_DEVICE,
     ): DeviceStartOptions {
         val response =
-            client.get("${ApiConfig.baseUrl}/ui/app/dev/status") {
+            client.apiGet("ui/app/dev/status") {
                 parameter("did", did)
                 parameter("more", "true")
-                header("Authorization", token)
-                header("ApplicationType", appType)
+                apiHeaders(token, appType)
             }
         val body = bodyJson(response, reportError = false)
         if (body.intOrNull("code") != 0) return DeviceStartOptions()
@@ -344,9 +357,8 @@ class IlifeApi(
     // 积分与任务
     suspend fun getMissionList(token: String): MissionListResult {
         val response =
-            client.get("${ApiConfig.baseUrl}/acc/score/mission-lst") {
-                header("Authorization", token)
-                header("ApplicationType", APP_TYPE_POINTS)
+            client.apiGet("acc/score/mission-lst") {
+                apiHeaders(token, APP_TYPE_POINTS)
             }
         val body = bodyJson(response)
         val data = body.obj("data") ?: return MissionListResult(emptyList())
@@ -433,11 +445,10 @@ class IlifeApi(
     ): DevResult {
         val sign = Signer.sign(adId, token, uid)
         val response =
-            client.post("${ApiConfig.baseUrl}/acc/score/score-send?sign=$sign&s=true") {
+            client.apiPost("acc/score/score-send?sign=$sign&s=true") {
                 contentType(ContentType.Application.Json)
                 setBody(body)
-                header("Authorization", token)
-                header("ApplicationType", APP_TYPE_POINTS)
+                apiHeaders(token, APP_TYPE_POINTS)
             }
         return parseDevResult(response.bodyAsText(), reportError = false)
     }
@@ -449,13 +460,12 @@ class IlifeApi(
         src: Int? = null,
     ): ScoreListResult {
         val response =
-            client.get("${ApiConfig.baseUrl}/acc/score/score-lst") {
+            client.apiGet("acc/score/score-lst") {
                 parameter("page", page.toString())
                 parameter("size", size.toString())
                 parameter("hasCount", "1")
                 if (src != null) parameter("src", src.toString())
-                header("Authorization", token)
-                header("ApplicationType", APP_TYPE_POINTS)
+                apiHeaders(token, APP_TYPE_POINTS)
             }
         val body = bodyJson(response)
         val data = body.arr("data") ?: return ScoreListResult(emptyList(), 0)
@@ -484,10 +494,9 @@ class IlifeApi(
     // 钱包与账单
     suspend fun getWalletOwner(token: String): WalletOwnerResult {
         val response =
-            client.get("${ApiConfig.baseUrl}/acc/wallet/owner") {
+            client.apiGet("acc/wallet/owner") {
                 parameter("all", "true")
-                header("Authorization", token)
-                header("ApplicationType", APP_TYPE_DEVICE)
+                apiHeaders(token, APP_TYPE_DEVICE)
             }
         val body = bodyJson(response)
         if (body.intOrNull("code") != 0) return WalletOwnerResult()
@@ -513,11 +522,10 @@ class IlifeApi(
     ): WalletAccount? {
         if (id.isEmpty()) return null
         val response =
-            client.get("${ApiConfig.baseUrl}/acc/wallet/detail") {
+            client.apiGet("acc/wallet/detail") {
                 parameter("id", id)
                 if (eid.isNotEmpty()) parameter("eid", eid)
-                header("Authorization", token)
-                header("ApplicationType", APP_TYPE_DEVICE)
+                apiHeaders(token, APP_TYPE_DEVICE)
             }
         val body = bodyJson(response)
         if (body.intOrNull("code") != 0) return null
@@ -552,13 +560,12 @@ class IlifeApi(
         status: Int,
     ): BillListResult {
         val response =
-            client.get("${ApiConfig.baseUrl}/bill/lst-owner") {
+            client.apiGet("bill/lst-owner") {
                 parameter("page", page.toString())
                 parameter("size", size.toString())
                 parameter("hasCount", (page == 0).toString())
                 parameter("status", status.toString())
-                header("Authorization", token)
-                header("ApplicationType", APP_TYPE_DEVICE)
+                apiHeaders(token, APP_TYPE_DEVICE)
             }
         val body = bodyJson(response)
         val data = body.arr("data") ?: return BillListResult(emptyList(), 0)
@@ -586,7 +593,7 @@ class IlifeApi(
     ): List<RechargeProduct> {
         if (eid.isEmpty()) return emptyList()
         val response =
-            client.get("${ApiConfig.baseUrl}/prd/lst") {
+            client.apiGet("prd/lst") {
                 parameter("eid", eid)
                 parameter("type", "1")
                 parameter("status", "1")
@@ -595,8 +602,7 @@ class IlifeApi(
                 parameter("page", "0")
                 parameter("size", "100")
                 parameter("hasCount", "false")
-                header("Authorization", token)
-                header("ApplicationType", APP_TYPE_DEVICE)
+                apiHeaders(token, APP_TYPE_DEVICE)
             }
         val body = bodyJson(response)
         val data = body.arr("data") ?: return emptyList()
@@ -629,11 +635,10 @@ class IlifeApi(
                 prds = listOf(ProductRef(productId, count = 1)),
             )
         val response =
-            client.post("${ApiConfig.baseUrl}/bill/save") {
+            client.apiPost("bill/save") {
                 contentType(ContentType.Application.Json)
                 setBody(requestJson.encodeToString(order))
-                header("Authorization", token)
-                header("ApplicationType", APP_TYPE_DEVICE)
+                apiHeaders(token, APP_TYPE_DEVICE)
             }
         val body = json.parseToJsonElement(response.bodyAsText()).jsonObject
         checkSessionExpired(body)
@@ -650,10 +655,9 @@ class IlifeApi(
     ): String? {
         if (orderId.isEmpty()) return null
         val response =
-            client.get("${ApiConfig.baseUrl}/trans/prepay/21") {
+            client.apiGet("trans/prepay/21") {
                 parameter("id", orderId)
-                header("Authorization", token)
-                header("ApplicationType", APP_TYPE_DEVICE)
+                apiHeaders(token, APP_TYPE_DEVICE)
             }
         val body = bodyJson(response)
         if (body.intOrNull("code") != 0) return null
@@ -667,11 +671,10 @@ class IlifeApi(
     ): DevResult {
         if (eid.isEmpty()) return DevResult(false, -1, "钱包信息缺失")
         val response =
-            client.post("${ApiConfig.baseUrl}/acc/wallet/refund") {
+            client.apiPost("acc/wallet/refund") {
                 contentType(ContentType.Application.Json)
                 setBody(requestJson.encodeToString(RefundWalletRequest(eid)))
-                header("Authorization", token)
-                header("ApplicationType", APP_TYPE_DEVICE)
+                apiHeaders(token, APP_TYPE_DEVICE)
             }
         return parseDevResult(response.bodyAsText())
     }
@@ -684,11 +687,10 @@ class IlifeApi(
     ): String? {
         if (endpointId.isEmpty() || score <= 0) return null
         val response =
-            client.post("${ApiConfig.baseUrl}/acc/score/score-use") {
+            client.apiPost("acc/score/score-use") {
                 contentType(ContentType.Application.Json)
                 setBody(requestJson.encodeToString(ExchangeScoreRequest(EndpointRef(endpointId), score)))
-                header("Authorization", token)
-                header("ApplicationType", APP_TYPE_DEVICE)
+                apiHeaders(token, APP_TYPE_DEVICE)
             }
         val body = json.parseToJsonElement(response.bodyAsText()).jsonObject
         checkSessionExpired(body)
@@ -706,10 +708,9 @@ class IlifeApi(
     ): Boolean {
         if (billId.isEmpty()) return false
         val response =
-            client.get("${ApiConfig.baseUrl}/bill/view-full") {
+            client.apiGet("bill/view-full") {
                 parameter("id", billId)
-                header("Authorization", token)
-                header("ApplicationType", APP_TYPE_DEVICE)
+                apiHeaders(token, APP_TYPE_DEVICE)
             }
         val body = bodyJson(response, reportError = false)
         if (body.intOrNull("code") != 0) return false
