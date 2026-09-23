@@ -8,28 +8,44 @@ import kotlin.test.assertEquals
 
 class DeviceStartArgsTest {
     @Test
-    fun partsPreferredWithGoods() {
-        val options =
-            DeviceStartOptions(
-                parts = listOf(DeviceOption(mode = 3, name = "标准")),
-                goods = listOf(DeviceGoods(pos = 1, out = 2)),
-            )
-        assertEquals("""{"mode":3,"ext":[{"pos":1,"out":2}]}""", buildDeviceStartArgs(options, 0))
+    fun detailPassageDeviceWithModeAndChannel() {
+        val options = DeviceStartOptions(parts = listOf(DeviceOption(mode = 7)))
+        assertEquals(
+            """{"pos":2,"mode":7}""",
+            buildDeviceDetailStartArgs(options, partMode = 7, channelIndex = 2, passageDevice = true),
+        )
     }
 
     @Test
-    fun channelWhenMultipleSubs() {
-        assertEquals("""{"pos":1,"mode":null}""", buildDeviceStartArgs(DeviceStartOptions(subCount = 2), 1))
+    fun detailPassageDeviceWithoutChannelReturnsEmpty() {
+        assertEquals(
+            "",
+            buildDeviceDetailStartArgs(DeviceStartOptions(), partMode = 7, channelIndex = -1, passageDevice = true),
+        )
     }
 
     @Test
-    fun emptyWhenNoOptions() {
-        assertEquals("", buildDeviceStartArgs(DeviceStartOptions(), 0))
+    fun detailModePreferredWithGoods() {
+        val options = DeviceStartOptions(goods = listOf(DeviceGoods(pos = 1, out = 2)))
+        assertEquals(
+            """{"mode":3,"ext":[{"pos":1,"out":2}]}""",
+            buildDeviceDetailStartArgs(options, partMode = 3, channelIndex = -1, passageDevice = false),
+        )
     }
 
     @Test
-    fun emptyWhenPartIndexOutOfRange() {
-        val options = DeviceStartOptions(parts = listOf(DeviceOption(mode = 3)))
-        assertEquals("", buildDeviceStartArgs(options, 5))
+    fun detailChannelOnly() {
+        assertEquals(
+            """{"pos":1,"mode":null}""",
+            buildDeviceDetailStartArgs(DeviceStartOptions(subCount = 2), partMode = null, channelIndex = 1, passageDevice = false),
+        )
+    }
+
+    @Test
+    fun detailEmptyWhenNoSelection() {
+        assertEquals(
+            "",
+            buildDeviceDetailStartArgs(DeviceStartOptions(), partMode = null, channelIndex = -1, passageDevice = false),
+        )
     }
 }

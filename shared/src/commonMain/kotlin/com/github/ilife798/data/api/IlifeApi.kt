@@ -1,9 +1,10 @@
 package com.github.ilife798.data.api
 
 import com.github.ilife798.data.model.BillRecord
+import com.github.ilife798.data.model.DeviceDetailInfo
 import com.github.ilife798.data.model.DeviceGoods
 import com.github.ilife798.data.model.DeviceOption
-import com.github.ilife798.data.model.DeviceStartOptions
+import com.github.ilife798.data.model.DeviceSubState
 import com.github.ilife798.data.model.RechargeProduct
 import com.github.ilife798.data.model.RefundProgress
 import com.github.ilife798.data.model.WalletAccount
@@ -22,6 +23,7 @@ import io.ktor.http.ContentType
 import io.ktor.http.contentType
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonObject
 
 class IlifeApi(
@@ -187,12 +189,13 @@ class IlifeApi(
     // 账号设置
     suspend fun setUseScore(
         token: String,
+        value: Int = 1,
         appType: String = APP_TYPE_DEVICE,
     ): DevResult {
         val response =
             client.apiPost("acc/upt") {
                 contentType(ContentType.Application.Json)
-                setBody(requestJson.encodeToString(SetUseScoreRequest(1)))
+                setBody(requestJson.encodeToString(SetUseScoreRequest(value)))
                 apiHeaders(token, appType)
             }
         return parseDevResult(response.bodyAsText(), reportError = false)
@@ -308,23 +311,28 @@ class IlifeApi(
         return DevStatusResult(deviceStatus = device.int("status"), geneStatus = geneStatus)
     }
 
-    // 启动前获取设备可选项（模式/通道/货道），more=true
-    suspend fun getDeviceStartOptions(
+    // 设备详情页数据：官方详情页初始化走 home/1?apply=6（BaseDeviceDetailActivity.d(id, 6)），
+    // dev/status?more=true 是状态轮询、不含 ep/payItems 等展示字段
+    suspend fun getDeviceDetail(
         token: String,
         did: String,
         appType: String = APP_TYPE_DEVICE,
-    ): DeviceStartOptions {
+    ): DeviceDetailInfo? {
         val response =
-            client.apiGet("ui/app/dev/status") {
+            client.apiGet("ui/app/dev/home/1") {
                 parameter("did", did)
-                parameter("more", "true")
+                parameter("apply", 6)
                 apiHeaders(token, appType)
             }
         val body = bodyJson(response, reportError = false)
-        if (body.intOrNull("code") != 0) return DeviceStartOptions()
-        val device = body.obj("data")?.obj("device") ?: return DeviceStartOptions()
+        if (body.intOrNull("code") != 0) return null
+        val data = body.obj("data") ?: return null
+        val device = data.obj("device") ?: return null
+        val gene = device.obj("gene")
+        val bm = device.obj("bm")
+        val ep = device.obj("ep")
         val parts =
-            device.obj("bm")?.arr("parts")?.mapNotNull { item ->
+            bm?.arr("parts")?.mapNotNull { item ->
                 val obj = item as? JsonObject ?: return@mapNotNull null
                 DeviceOption(
                     mode = obj.int("mode", -1),
@@ -333,14 +341,60 @@ class IlifeApi(
                     maxT = obj.int("maxT"),
                 )
             } ?: emptyList()
-        val subCount = device.arr("subs")?.size ?: 0
+        val subs =
+            device.arr("subs")?.mapNotNull { item ->
+                val obj = item as? JsonObject ?: return@mapNotNull null
+                DeviceSubState(
+                    status = obj.intOrNull("status"),
+                    err = obj.intOrNull("err"),
+                    isSelect = obj.str("isSelect") == "1" || obj.str("isSelect") == "true",
+                )
+            } ?: emptyList()
         val goods =
             device.obj("gs")?.arr("items")?.mapNotNull { item ->
                 val obj = item as? JsonObject ?: return@mapNotNull null
                 DeviceGoods(pos = obj.int("pos"), out = obj.int("out"))
             } ?: emptyList()
-        return DeviceStartOptions(parts = parts, subCount = subCount, goods = goods)
+        val sensors =
+            bm?.arr("sensors")?.mapNotNull { item ->
+                (item as? JsonPrimitive)?.content?.toIntOrNull()
+            } ?: emptyList()
+        val payTypes =
+            data.arr("payItems")?.mapNotNull { item ->
+                (item as? JsonObject)?.intOrNull("type")
+                    ?: (item as? JsonPrimitive)?.content?.toIntOrNull()
+            } ?: emptyList()
+        return DeviceDetailInfo(
+            id = device.str("id", did),
+            name = device.str("name"),
+            dtype = bm?.int("dtype") ?: 0,
+            deviceStatus = device.int("status", 1),
+            geneStatus = gene?.int("status") ?: 0,
+            geneEndTime = timeToMillis(gene?.long("time") ?: 0L),
+            expS = timeToSeconds(gene?.long("expS") ?: 0L),
+            expE = timeToSeconds(gene?.long("expE") ?: 0L),
+            enterpriseName = ep?.str("name") ?: "",
+            enterpriseAbbr = ep?.str("abbr") ?: "",
+            contactPhone = ep?.obj("contact")?.str("pn") ?: "",
+            parts = parts,
+            subs = subs,
+            goods = goods,
+            sensors = sensors,
+            payTypes = payTypes,
+            userId = data.obj("user")?.str("id") ?: "",
+        )
     }
+
+    // gene.time：秒级时间戳归一为毫秒
+    private fun timeToMillis(value: Long): Long =
+        when {
+            value <= 0L -> 0L
+            value < 100_000_000_000L -> value * 1000
+            else -> value
+        }
+
+    // expS/expE：毫秒归一为秒
+    private fun timeToSeconds(value: Long): Long = if (value >= 100_000_000_000L) value / 1000 else value
 
     private fun parseDevResult(
         raw: String,

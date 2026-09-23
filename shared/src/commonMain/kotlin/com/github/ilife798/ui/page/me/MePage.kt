@@ -101,7 +101,7 @@ private fun AccountSection(
         if (hasApp) viewModel.loadAccountInfo()
     }
 
-    SmallTitle(text = "账号", insideMargin = PaddingValues(12.dp, 8.dp))
+    SmallTitle(text = "账号", insideMargin = PaddingValues(16.dp, 8.dp))
     Card(modifier = Modifier.fillMaxWidth()) {
         Row(
             modifier =

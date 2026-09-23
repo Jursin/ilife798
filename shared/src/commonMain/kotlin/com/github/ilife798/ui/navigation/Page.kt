@@ -21,5 +21,9 @@ sealed class Page : NavKey {
 
     @Serializable data object DeviceScan : Page()
 
+    @Serializable data class DeviceDetail(
+        val deviceId: String,
+    ) : Page()
+
     @Serializable data object License : Page()
 }

@@ -4,7 +4,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.github.ilife798.AppStorage
-import com.github.ilife798.DeviceTile
 import com.github.ilife798.RunNotifications
 import com.github.ilife798.StorageKeys
 import com.github.ilife798.data.api.APP_TYPE_DEVICE
@@ -13,8 +12,7 @@ import com.github.ilife798.data.api.DevStatusResult
 import com.github.ilife798.data.api.IlifeApi
 import com.github.ilife798.data.model.AppState
 import com.github.ilife798.data.model.Device
-import com.github.ilife798.data.model.DevicePendingStart
-import com.github.ilife798.data.model.DeviceStartOptions
+import com.github.ilife798.data.model.DeviceDetailInfo
 import com.github.ilife798.data.model.HomeDeviceType
 import com.github.ilife798.update.requestNotificationPermission
 import com.github.ilife798.util.QrCodeParser
@@ -34,9 +32,6 @@ private const val PAY_TYPE_ALIPAY = 21
 // 运行中设备的状态轮询间隔（秒），用于感知机器端手动停止
 private const val DEVICE_MONITOR_INTERVAL_SECONDS = 5L
 
-// 无模式/多通道的设备类型（水表/淋浴/直饮水），启动时无需拉取可选项
-private val SIMPLE_DEVICE_TYPES = setOf(5, 6, 8)
-
 // 设备列表、启停与扫码解析。
 class DeviceController(
     private val scope: CoroutineScope,
@@ -55,20 +50,19 @@ class DeviceController(
         private set
     private var homeDeviceTypeExplicit = false
 
-    // 设备上是否已存在快捷设置图块，用于隐藏首页引导提示
-    var homeTileCreated by mutableStateOf(DeviceTile.isTileAdded())
+    // 开启自动抵扣（acc/upt useScore）
+    var autoDeduct by mutableStateOf(true)
         private set
 
-    // 扫码解析出的设备编号，供 DeviceAddPage 回填输入框
+    // 扫码解析出的设备编号，供导航跳转到对应设备详情页
     var scannedDeviceId by mutableStateOf<String?>(null)
         private set
 
-    // 启动前查询设备可选项；有选项则交由 UI 弹窗选择，无选项直接启动
-    var pendingStart by mutableStateOf<DevicePendingStart?>(null)
+    // 当前打开的设备详情（模式/通道/商家等，status?more=true 全量数据）
+    var deviceDetail by mutableStateOf<DeviceDetailInfo?>(null)
         private set
 
-    // 快捷设置图块点击后待处理的设备编号，由首页消费并触发启动按钮逻辑
-    var pendingExternalDeviceId by mutableStateOf<String?>(null)
+    var detailDeviceId by mutableStateOf<String?>(null)
         private set
 
     var pollingDeviceId by mutableStateOf<String?>(null)
@@ -107,18 +101,32 @@ class DeviceController(
         }
     }
 
+    fun updateAutoDeduct(enabled: Boolean) {
+        autoDeduct = enabled
+        val useApp = getState().account.appToken.isNotEmpty()
+        val token = if (useApp) getState().account.appToken else getState().account.token
+        val appType = if (useApp) APP_TYPE_DEVICE else APP_TYPE_POINTS
+        if (token.isEmpty()) return
+        scope.launch {
+            try {
+                val result = api.setUseScore(token, value = if (enabled) 1 else 0, appType = appType)
+                if (!result.success) onToast("设置失败，请稍后再试")
+            } catch (e: Exception) {
+                onLogError("updateAutoDeduct", e)
+            }
+        }
+    }
+
     private fun inferHomeDeviceType(devices: List<Device>) {
         if (homeDeviceTypeExplicit) return
         val dtypes = devices.map { it.dtype }.filter { it != 0 }.toSet()
         if (dtypes.isEmpty()) return
-        HomeDeviceType.entries
-            .firstOrNull { it.deviceType in dtypes }
-            ?.let { homeDeviceType = it }
-    }
-
-    fun markHomeTileCreated() {
-        homeTileCreated = true
-        DeviceTile.markTileAdded()
+        // 优先精确匹配四类场景，全都不是时归入“其它”
+        val matched =
+            HomeDeviceType.entries
+                .firstOrNull { it != HomeDeviceType.Other && it.deviceType in dtypes }
+                ?: HomeDeviceType.Other.takeIf { dtypes.any { HomeDeviceType.fromDeviceType(it) == HomeDeviceType.Other } }
+        matched?.let { homeDeviceType = it }
     }
 
     fun reset() {
@@ -126,6 +134,8 @@ class DeviceController(
         deviceMonitorJob = null
         runningDevices.clear()
         pollingDeviceId = null
+        deviceDetail = null
+        detailDeviceId = null
         lastDeviceLoadTime = 0L
     }
 
@@ -187,17 +197,47 @@ class DeviceController(
                 val result = api.devFavo(token, id, remove = false)
                 if (result.success) {
                     onToast("设备已添加")
-                    loadDeviceInfo(force = true)?.join()
-                    // 添加成功后自动切换到该设备对应的类型
-                    getState()
-                        .devices
-                        .firstOrNull { it.id == id }
-                        ?.let { HomeDeviceType.fromDeviceType(it.dtype) }
-                        ?.let { selectHomeDeviceType(it) }
+                    // 乐观加入收藏列表，使详情页立即显示“已收藏”；
+                    // 完整刷新与首页类型切换延迟到离开详情页时执行
+                    setState { state ->
+                        if (state.devices.any { it.id == id }) {
+                            state
+                        } else {
+                            state.copy(
+                                devices =
+                                    state.devices +
+                                        Device(
+                                            id = id,
+                                            name = "",
+                                            geneStatus = 99,
+                                            deviceStatus = 1,
+                                            dtype = 0,
+                                        ),
+                            )
+                        }
+                    }
                 }
             } catch (e: Exception) {
                 onLogError("addDevice", e)
                 onToast("添加失败：${e.message}")
+            }
+        }
+    }
+
+    // 离开设备详情页：刷新首页设备列表，并按该设备类型切换首页类型选择
+    fun onDeviceDetailClosed(deviceId: String) {
+        scope.launch {
+            try {
+                loadDeviceInfo(force = true)?.join()
+                getState()
+                    .devices
+                    .firstOrNull { it.id == deviceId }
+                    ?.let { HomeDeviceType.fromDeviceType(it.dtype) }
+                    ?.let { selectHomeDeviceType(it) }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                onLogError("onDeviceDetailClosed", e)
             }
         }
     }
@@ -257,62 +297,65 @@ class DeviceController(
         }
     }
 
-    fun removeDevice(deviceId: String) {
+    // 收藏/取消收藏
+    fun toggleDeviceFavorite(
+        deviceId: String,
+        followed: Boolean,
+    ) {
         val token = currentToken()
         if (token.isEmpty()) return
         scope.launch {
             try {
-                val result = api.devFavo(token, deviceId, remove = true)
+                val result = api.devFavo(token, deviceId, remove = followed)
                 if (result.success) {
-                    onToast("设备已删除")
+                    onToast(if (followed) "取消收藏" else "收藏成功")
                     loadDeviceInfo(force = true)
                 }
             } catch (e: Exception) {
-                onLogError("removeDevice", e)
-                onToast("删除失败：${e.message}")
+                onLogError("toggleDeviceFavorite", e)
+                onToast("操作失败：${e.message}")
             }
         }
     }
 
-    fun requestExternalDeviceStart(deviceId: String) {
-        pendingExternalDeviceId = deviceId
-    }
-
-    fun consumeExternalDeviceStart() {
-        pendingExternalDeviceId = null
-    }
-
-    fun prepareStartDevice(device: Device) {
-        val name = device.name.ifEmpty { device.id }
-        // 水表(5)/淋浴(6)/直饮水(8) 无模式/多通道，免请求直接弹确认
-        if (device.dtype in SIMPLE_DEVICE_TYPES) {
-            pendingStart = DevicePendingStart(device.id, name, DeviceStartOptions())
-            return
-        }
+    // 设备详情页
+    fun loadDeviceDetail(deviceId: String): Job? {
         val useApp = getState().account.appToken.isNotEmpty()
         val token = if (useApp) getState().account.appToken else getState().account.token
         val appType = if (useApp) APP_TYPE_DEVICE else APP_TYPE_POINTS
-        if (token.isEmpty()) return
-        scope.launch {
-            val options =
-                try {
-                    api.getDeviceStartOptions(token, device.id, appType)
-                } catch (e: Exception) {
-                    onLogError("getDeviceStartOptions", e)
-                    DeviceStartOptions()
-                }
-            pendingStart = DevicePendingStart(device.id, name, options)
+        if (token.isEmpty()) return null
+        if (detailDeviceId != deviceId) {
+            detailDeviceId = deviceId
+            deviceDetail = null
         }
-    }
-
-    fun cancelPendingStart() {
-        pendingStart = null
-    }
-
-    fun confirmPendingStart(selectedIndex: Int) {
-        val pending = pendingStart ?: return
-        pendingStart = null
-        toggleDeviceRunning(pending.deviceId, buildDeviceStartArgs(pending.options, selectedIndex))
+        return scope.launch {
+            try {
+                val detail = api.getDeviceDetail(token, deviceId, appType) ?: return@launch
+                if (!isCurrentToken(token)) return@launch
+                deviceDetail = detail
+                setState { state ->
+                    state.copy(
+                        devices =
+                            state.devices.map {
+                                if (it.id == deviceId) {
+                                    it.copy(
+                                        name = it.name.ifEmpty { detail.name },
+                                        geneStatus = detail.geneStatus,
+                                        deviceStatus = detail.deviceStatus,
+                                        dtype = if (it.dtype == 0) detail.dtype else it.dtype,
+                                    )
+                                } else {
+                                    it
+                                }
+                            },
+                    )
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                onLogError("loadDeviceDetail", e)
+            }
+        }
     }
 
     fun toggleDeviceRunning(
@@ -339,9 +382,16 @@ class DeviceController(
                 val result =
                     if (starting) {
                         requestNotificationPermission()
-                        api.setUseScore(token, appType = appType)
-                        // 优先钱袋支付（91），余额不足等失败时自动切换支付宝免密支付（21）
-                        val wallet = api.devStart(token, deviceId, appType, ptype = PAY_TYPE_WALLET, args = args, reportError = false)
+                        // 优先钱袋支付（91），失败时自动切换支付宝免密支付（21）
+                        val wallet =
+                            api.devStart(
+                                token,
+                                deviceId,
+                                appType,
+                                ptype = PAY_TYPE_WALLET,
+                                args = args,
+                                reportError = false,
+                            )
                         if (wallet.success) {
                             wallet
                         } else {
@@ -395,6 +445,13 @@ class DeviceController(
                                 }
                             },
                     )
+                }
+                // 详情页同步最新状态
+                if (newStatus != null) {
+                    deviceDetail =
+                        deviceDetail
+                            ?.takeIf { it.id == deviceId }
+                            ?.copy(geneStatus = newStatus.geneStatus, deviceStatus = newStatus.deviceStatus)
                 }
                 val isRunning =
                     newStatus?.geneStatus?.let { it != 99 }

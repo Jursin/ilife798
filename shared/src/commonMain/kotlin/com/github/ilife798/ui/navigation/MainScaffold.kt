@@ -19,10 +19,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -35,6 +33,7 @@ import com.github.ilife798.data.viewmodel.AppViewModel
 import com.github.ilife798.ui.page.account.AccountPage
 import com.github.ilife798.ui.page.bill.BillPage
 import com.github.ilife798.ui.page.device.DeviceAddPage
+import com.github.ilife798.ui.page.device.DeviceDetailPage
 import com.github.ilife798.ui.page.device.QrScannerPage
 import com.github.ilife798.ui.page.home.HomePage
 import com.github.ilife798.ui.page.license.LicensePage
@@ -204,6 +203,7 @@ private fun HomePagerPage(
             HomePage(
                 viewModel = viewModel,
                 onDeviceAddClick = { navigate(Page.DeviceAdd) },
+                onDeviceClick = { navigate(Page.DeviceDetail(it)) },
                 bottomPadding = bottomPadding,
             )
         }
@@ -268,7 +268,14 @@ fun MainScaffold(viewModel: AppViewModel) {
 
     val interceptPredictiveBack = !predictiveBackEnabled && backStack.size > 1
 
-    var scanFromShortcut by remember { mutableStateOf(false) }
+    // 扫码解析完成：自动收藏并跳转对应设备详情页
+    val scannedDeviceId = viewModel.scannedDeviceId
+    LaunchedEffect(scannedDeviceId) {
+        if (scannedDeviceId == null) return@LaunchedEffect
+        viewModel.consumeScannedDeviceId()
+        viewModel.addDevice(scannedDeviceId)
+        navigate(Page.DeviceDetail(scannedDeviceId))
+    }
 
     val pagerState = rememberPagerState(pageCount = { 3 })
     val coroutineScope = rememberCoroutineScope()
@@ -281,7 +288,6 @@ fun MainScaffold(viewModel: AppViewModel) {
         viewModel = viewModel,
         mainPagerState = mainPagerState,
         navigate = navigate,
-        onScanFromShortcut = { scanFromShortcut = true },
         clearToRoot = { while (backStack.size > 1) backStack.removeLastOrNull() },
     )
 
@@ -429,9 +435,9 @@ fun MainScaffold(viewModel: AppViewModel) {
                         viewModel = viewModel,
                         onBack = onBack,
                         onScanClick = {
-                            scanFromShortcut = false
                             navigate(Page.DeviceScan)
                         },
+                        onNavigateToDevice = { id -> navigate(Page.DeviceDetail(id)) },
                     )
                 }
             }
@@ -442,9 +448,20 @@ fun MainScaffold(viewModel: AppViewModel) {
                         onResult = { raw ->
                             viewModel.submitScannedRaw(raw)
                             onBack()
-                            // 由快捷方式进入时，扫码后跳转添加设备页以便回填设备编号
-                            if (scanFromShortcut) navigate(Page.DeviceAdd)
                         },
+                    )
+                }
+            }
+            entry<Page.DeviceDetail>(transition = detailTransition) { key ->
+                val closeDetail: () -> Unit = {
+                    viewModel.onDeviceDetailClosed(key.deviceId)
+                    onBack()
+                }
+                NavEntry(interceptPredictiveBack, closeDetail) {
+                    DeviceDetailPage(
+                        viewModel = viewModel,
+                        deviceId = key.deviceId,
+                        onBack = closeDetail,
                     )
                 }
             }

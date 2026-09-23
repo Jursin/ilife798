@@ -19,8 +19,7 @@ import com.github.ilife798.data.model.Account
 import com.github.ilife798.data.model.AccountInfo
 import com.github.ilife798.data.model.AppState
 import com.github.ilife798.data.model.DEFAULT_SEED_COLOR
-import com.github.ilife798.data.model.Device
-import com.github.ilife798.data.model.DevicePendingStart
+import com.github.ilife798.data.model.DeviceDetailInfo
 import com.github.ilife798.data.model.HomeDeviceType
 import com.github.ilife798.data.model.MissionInfo
 import com.github.ilife798.data.model.PaletteStyle
@@ -507,35 +506,31 @@ class AppViewModel : ViewModel() {
     }
 
     val homeDeviceType: HomeDeviceType get() = device.homeDeviceType
-    val homeTileCreated: Boolean get() = device.homeTileCreated
     val scannedDeviceId: String? get() = device.scannedDeviceId
-    val pendingStart: DevicePendingStart? get() = device.pendingStart
-    val pendingExternalDeviceId: String? get() = device.pendingExternalDeviceId
+    val deviceDetail: DeviceDetailInfo? get() = device.deviceDetail
     val pollingDeviceId: String? get() = device.pollingDeviceId
+    val autoDeduct: Boolean get() = device.autoDeduct
 
     fun selectHomeDeviceType(type: HomeDeviceType) = device.selectHomeDeviceType(type)
 
-    fun markHomeTileCreated() = device.markHomeTileCreated()
+    fun updateAutoDeduct(enabled: Boolean) = device.updateAutoDeduct(enabled)
 
     fun loadDeviceInfo(force: Boolean = false): Job? = device.loadDeviceInfo(force)
 
     fun addDevice(id: String) = device.addDevice(id)
 
+    fun onDeviceDetailClosed(deviceId: String) = device.onDeviceDetailClosed(deviceId)
+
     fun submitScannedRaw(raw: String) = device.submitScannedRaw(raw)
 
     fun consumeScannedDeviceId() = device.consumeScannedDeviceId()
 
-    fun removeDevice(deviceId: String) = device.removeDevice(deviceId)
+    fun toggleDeviceFavorite(
+        deviceId: String,
+        followed: Boolean,
+    ) = device.toggleDeviceFavorite(deviceId, followed)
 
-    fun requestExternalDeviceStart(deviceId: String) = device.requestExternalDeviceStart(deviceId)
-
-    fun consumeExternalDeviceStart() = device.consumeExternalDeviceStart()
-
-    fun prepareStartDevice(device: Device) = this.device.prepareStartDevice(device)
-
-    fun cancelPendingStart() = device.cancelPendingStart()
-
-    fun confirmPendingStart(selectedIndex: Int) = device.confirmPendingStart(selectedIndex)
+    fun loadDeviceDetail(deviceId: String): Job? = device.loadDeviceDetail(deviceId)
 
     fun toggleDeviceRunning(
         deviceId: String,

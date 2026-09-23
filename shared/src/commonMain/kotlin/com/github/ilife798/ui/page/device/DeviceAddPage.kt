@@ -27,6 +27,7 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.unit.dp
 import com.github.ilife798.data.viewmodel.AppViewModel
+import com.github.ilife798.showToast
 import com.github.ilife798.ui.theme.appBarBlur
 import com.github.ilife798.ui.theme.blurAppBarColor
 import com.github.ilife798.ui.theme.captureForBlur
@@ -48,11 +49,15 @@ import top.yukonga.miuix.kmp.icon.extended.Scan
 import top.yukonga.miuix.kmp.utils.overScrollVertical
 import top.yukonga.miuix.kmp.utils.scrollEndHaptic
 
+// 官方设备编号格式（AddDeviceActivity → p.w）：12-16 位小写字母和数字
+private val DeviceIdRegex = Regex("[0-9a-z]{12,16}")
+
 @Composable
 fun DeviceAddPage(
     viewModel: AppViewModel,
     onBack: () -> Unit,
     onScanClick: () -> Unit = {},
+    onNavigateToDevice: (String) -> Unit = {},
 ) {
     var deviceId by remember { mutableStateOf("") }
     val focusManager = LocalFocusManager.current
@@ -67,15 +72,6 @@ fun DeviceAddPage(
     }
     val dynamicColor = viewModel.state.dynamicColor
     val blurBackdrop = rememberAppBlurBackdrop(viewModel.state.appBlur)
-
-    // 扫码解析完成后（在 ViewModel 中执行）回填设备编号，避免在 composition 协程里发起请求
-    val scannedDeviceId = viewModel.scannedDeviceId
-    LaunchedEffect(scannedDeviceId) {
-        if (scannedDeviceId != null) {
-            deviceId = scannedDeviceId
-            viewModel.consumeScannedDeviceId()
-        }
-    }
 
     Scaffold(
         topBar = {
@@ -148,9 +144,14 @@ fun DeviceAddPage(
                         Button(
                             modifier = Modifier.weight(1f),
                             onClick = {
-                                if (deviceId.isNotBlank()) {
-                                    viewModel.addDevice(deviceId.trim())
-                                    onBack()
+                                val id = deviceId.trim()
+                                if (!DeviceIdRegex.matches(id)) {
+                                    showToast("请输入12到16位的字母和数字组成的有效设备编号")
+                                } else {
+                                    focusManager.clearFocus()
+                                    keyboard?.hide()
+                                    viewModel.addDevice(id)
+                                    onNavigateToDevice(id)
                                 }
                             },
                             enabled = deviceId.isNotBlank(),

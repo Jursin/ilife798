@@ -5,9 +5,7 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
@@ -40,6 +38,7 @@ import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.CardDefaults
+import top.yukonga.miuix.kmp.basic.HorizontalDivider
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
@@ -210,16 +209,17 @@ fun TasksPage(
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween,
+                                // 行高由图标按钮撑起，标题与图标中线对齐
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
                                 Text(
                                     text = "运行日志",
-                                    style = MiuixTheme.textStyles.title2,
+                                    style = MiuixTheme.textStyles.title3,
                                     color = MiuixTheme.colorScheme.onSurface,
                                 )
                                 IconButton(
-                                    minHeight = 35.dp,
-                                    minWidth = 35.dp,
+                                    minHeight = 32.dp,
+                                    minWidth = 32.dp,
                                     backgroundColor = MiuixTheme.colorScheme.secondaryContainer.copy(alpha = 0.8f),
                                     onClick = {
                                         copyToClipboard(state.taskLogs.joinToString("\n"), "已复制到剪贴板")
@@ -233,7 +233,7 @@ fun TasksPage(
                                     )
                                 }
                             }
-                            Spacer(modifier = Modifier.height(8.dp))
+                            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                             state.taskLogs.forEach { log ->
                                 Text(
                                     text = log,

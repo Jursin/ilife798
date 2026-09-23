@@ -31,10 +31,11 @@ enum class HomeDeviceType(
     HairDrying("吹风", 20),
     Drinking("饮水", 8),
     Shower("淋浴", 6),
+    Other("其它", -1),
     ;
 
     companion object {
-        fun fromDeviceType(dtype: Int): HomeDeviceType? = entries.firstOrNull { it.deviceType == dtype }
+        fun fromDeviceType(dtype: Int): HomeDeviceType? = entries.firstOrNull { it.deviceType == dtype } ?: if (dtype > 0) Other else null
     }
 }
 
@@ -59,11 +60,37 @@ data class DeviceStartOptions(
     val goods: List<DeviceGoods> = emptyList(),
 )
 
-// 待用户确认启动的设备（含可选项）
-data class DevicePendingStart(
-    val deviceId: String,
-    val deviceName: String,
-    val options: DeviceStartOptions,
+// 设备通道状态（/ui/app/dev/status?more=true 的 device.subs）
+data class DeviceSubState(
+    val status: Int? = null,
+    val err: Int? = null,
+    val isSelect: Boolean = false,
+) {
+    // err==0 且 status==99 才可选；status 缺失时仅看 err
+    val available: Boolean get() = (err ?: 0) == 0 && (status == null || status == 99)
+}
+
+// 设备详情（/ui/app/dev/status?more=true 全量解析）
+data class DeviceDetailInfo(
+    val id: String = "",
+    val name: String = "",
+    val dtype: Int = 0,
+    val deviceStatus: Int = 1,
+    val geneStatus: Int = 0,
+    // 预计结束时间（毫秒）
+    val geneEndTime: Long = 0L,
+    // 免费时段（秒）
+    val expS: Long = 0L,
+    val expE: Long = 0L,
+    val enterpriseName: String = "",
+    val enterpriseAbbr: String = "",
+    val contactPhone: String = "",
+    val parts: List<DeviceOption> = emptyList(),
+    val subs: List<DeviceSubState> = emptyList(),
+    val goods: List<DeviceGoods> = emptyList(),
+    val sensors: List<Int> = emptyList(),
+    val payTypes: List<Int> = emptyList(),
+    val userId: String = "",
 )
 
 data class PointsInfo(

@@ -69,7 +69,7 @@ internal fun SettingsSection(
     var versionTapCount by remember { mutableIntStateOf(0) }
     var lastVersionTapAt by remember { mutableLongStateOf(0L) }
 
-    SmallTitle(text = "外观设置", insideMargin = PaddingValues(12.dp, 8.dp))
+    SmallTitle(text = "外观设置", insideMargin = PaddingValues(16.dp, 8.dp))
     Card(modifier = Modifier.fillMaxWidth()) {
         Column {
             OverlayDropdownPreference(
@@ -158,7 +158,7 @@ internal fun SettingsSection(
             }
         }
     }
-    SmallTitle(text = "更新设置", insideMargin = PaddingValues(12.dp, 8.dp))
+    SmallTitle(text = "更新设置", insideMargin = PaddingValues(16.dp, 8.dp))
     Card(modifier = Modifier.fillMaxWidth()) {
         Column {
             ArrowPreference(
@@ -179,7 +179,7 @@ internal fun SettingsSection(
             )
         }
     }
-    SmallTitle(text = "关于", insideMargin = PaddingValues(12.dp, 8.dp))
+    SmallTitle(text = "关于", insideMargin = PaddingValues(16.dp, 8.dp))
     Card(modifier = Modifier.fillMaxWidth()) {
         Column {
             BasicComponent(

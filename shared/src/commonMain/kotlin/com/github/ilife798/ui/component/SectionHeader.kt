@@ -13,7 +13,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 fun SectionHeader(title: String) {
     Text(
         text = title,
-        style = MiuixTheme.textStyles.title2,
+        style = MiuixTheme.textStyles.title3,
         color = MiuixTheme.colorScheme.onSurface,
     )
     HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))

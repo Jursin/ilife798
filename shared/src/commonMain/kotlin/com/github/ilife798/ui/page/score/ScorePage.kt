@@ -153,7 +153,7 @@ fun ScorePage(
                     Column(modifier = Modifier.padding(16.dp)) {
                         Text(
                             text = "积分概览",
-                            style = MiuixTheme.textStyles.title2,
+                            style = MiuixTheme.textStyles.title3,
                             color = MiuixTheme.colorScheme.onSurface,
                         )
                         Row(

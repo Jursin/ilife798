@@ -2,18 +2,23 @@ package com.github.ilife798.data.viewmodel
 
 import com.github.ilife798.data.model.DeviceStartOptions
 
-// 组装 /dev/start 的 args：优先模式(parts)，其次通道(subs)
-internal fun buildDeviceStartArgs(
+// 通道设备固定 {pos,mode}，其余有模式走 {mode,ext}，仅通道走 {pos,mode:null}
+internal fun buildDeviceDetailStartArgs(
     options: DeviceStartOptions,
-    selectedIndex: Int,
+    partMode: Int?,
+    channelIndex: Int,
+    passageDevice: Boolean,
 ): String {
-    if (options.parts.isNotEmpty()) {
-        val part = options.parts.getOrNull(selectedIndex) ?: return ""
-        val ext = options.goods.joinToString(",") { """{"pos":${it.pos},"out":${it.out}}""" }
-        return """{"mode":${part.mode},"ext":[$ext]}"""
+    if (passageDevice) {
+        if (channelIndex < 0) return ""
+        return """{"pos":$channelIndex,"mode":${partMode ?: "null"}}"""
     }
-    if (options.subCount > 1) {
-        return """{"pos":$selectedIndex,"mode":null}"""
+    if (partMode != null) {
+        val ext = options.goods.joinToString(",") { """{"pos":${it.pos},"out":${it.out}}""" }
+        return """{"mode":$partMode,"ext":[$ext]}"""
+    }
+    if (channelIndex >= 0) {
+        return """{"pos":$channelIndex,"mode":null}"""
     }
     return ""
 }

@@ -14,7 +14,7 @@ class ModelsTest {
         assertEquals(HomeDeviceType.Drinking, HomeDeviceType.fromDeviceType(8))
         assertEquals(HomeDeviceType.Shower, HomeDeviceType.fromDeviceType(6))
         assertNull(HomeDeviceType.fromDeviceType(0))
-        assertNull(HomeDeviceType.fromDeviceType(999))
+        assertEquals(HomeDeviceType.Other, HomeDeviceType.fromDeviceType(999))
     }
 
     @Test

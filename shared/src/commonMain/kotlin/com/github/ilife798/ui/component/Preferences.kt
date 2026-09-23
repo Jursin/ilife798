@@ -8,7 +8,7 @@ import top.yukonga.miuix.kmp.basic.Switch
 @Composable
 fun SwitchPreference(
     title: String,
-    summary: String,
+    summary: String? = null,
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
     enabled: Boolean = true,

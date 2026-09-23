@@ -11,25 +11,23 @@ fun AppIntentEffects(
     viewModel: AppViewModel,
     mainPagerState: MainPagerState,
     navigate: (Page) -> Unit,
-    onScanFromShortcut: () -> Unit,
     clearToRoot: () -> Unit,
 ) {
     // 桌面快捷方式“扫一扫”：冷启动与 onNewIntent 均通过该信号跳转扫码页
     val scanRequestId = AppRequests.scan.id
     LaunchedEffect(scanRequestId) {
         if (scanRequestId <= 0) return@LaunchedEffect
-        onScanFromShortcut()
         navigate(Page.DeviceScan)
         AppRequests.scan.consume()
     }
 
-    // 快捷设置图块：回到首页并触发对应设备的“启动按钮”流程，停在弹出对话框
+    // 快捷设置图块：回到首页并打开对应设备详情页
     val startDeviceId = AppRequests.startDevice.value
     LaunchedEffect(startDeviceId) {
         val id = startDeviceId ?: return@LaunchedEffect
         clearToRoot()
         mainPagerState.animateToPage(0)
-        viewModel.requestExternalDeviceStart(id)
+        navigate(Page.DeviceDetail(id))
         AppRequests.startDevice.consume()
     }
 
