@@ -42,6 +42,9 @@ object AppRequests {
     val startDevice = UiRequest<String?>(null)
     val runTasks = UiCommand()
 
+    // NFC 标签携带的设备链接（与二维码同源，复用扫码添加流程）
+    val tagContent = UiRequest<String?>(null)
+
     // 运行状态通知
     val stopDevice = UiRequest<String?>(null)
     val openHome = UiCommand()

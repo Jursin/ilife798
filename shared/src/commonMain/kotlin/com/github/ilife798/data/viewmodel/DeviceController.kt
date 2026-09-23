@@ -15,7 +15,7 @@ import com.github.ilife798.data.model.Device
 import com.github.ilife798.data.model.DeviceDetailInfo
 import com.github.ilife798.data.model.HomeDeviceType
 import com.github.ilife798.update.requestNotificationPermission
-import com.github.ilife798.util.QrCodeParser
+import com.github.ilife798.util.DeviceLinkParser
 import com.github.ilife798.util.currentTimeMillis
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -242,7 +242,7 @@ class DeviceController(
         }
     }
 
-    // 扫码结果在 scope 中解析，避免随扫码页/添加页离开 composition 被取消
+    // 二维码/NFC 内容在 scope 中解析，避免随扫码页/添加页离开 composition 被取消
     fun submitScannedRaw(raw: String) {
         scope.launch {
             val deviceId = resolveScanDeviceId(raw) ?: return@launch
@@ -261,7 +261,7 @@ class DeviceController(
             onToast("请先登录")
             return null
         }
-        val parsed = QrCodeParser.parse(raw)
+        val parsed = DeviceLinkParser.parse(raw)
         parsed.deviceId?.takeIf { it.isNotEmpty() }?.let { return it }
         val qrId = parsed.qrId
         if (qrId.isNullOrEmpty()) {

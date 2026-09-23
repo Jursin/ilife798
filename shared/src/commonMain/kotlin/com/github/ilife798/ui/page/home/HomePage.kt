@@ -166,7 +166,7 @@ private fun DeviceCard(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    text = "设备",
+                    text = "常用设备",
                     style = MiuixTheme.textStyles.title3,
                     color = MiuixTheme.colorScheme.onSurface,
                 )

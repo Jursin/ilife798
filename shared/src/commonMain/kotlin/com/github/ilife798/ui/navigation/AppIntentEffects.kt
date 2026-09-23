@@ -21,6 +21,14 @@ fun AppIntentEffects(
         AppRequests.scan.consume()
     }
 
+    // NFC 标签：取出携带的设备链接，复用扫码解析→收藏→跳转详情的完整流程
+    val tagUri = AppRequests.tagContent.value
+    LaunchedEffect(tagUri) {
+        if (tagUri.isNullOrEmpty()) return@LaunchedEffect
+        viewModel.submitScannedRaw(tagUri)
+        AppRequests.tagContent.consume()
+    }
+
     // 快捷设置图块：回到首页并打开对应设备详情页
     val startDeviceId = AppRequests.startDevice.value
     LaunchedEffect(startDeviceId) {
