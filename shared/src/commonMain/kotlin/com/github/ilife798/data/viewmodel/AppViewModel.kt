@@ -18,6 +18,7 @@ import com.github.ilife798.data.api.str
 import com.github.ilife798.data.model.Account
 import com.github.ilife798.data.model.AccountInfo
 import com.github.ilife798.data.model.AppState
+import com.github.ilife798.data.model.BillDetailInfo
 import com.github.ilife798.data.model.DEFAULT_SEED_COLOR
 import com.github.ilife798.data.model.DeviceDetailInfo
 import com.github.ilife798.data.model.HomeDeviceType
@@ -771,6 +772,8 @@ class AppViewModel : ViewModel() {
     fun loadMoreBills() = wallet.loadMoreBills()
 
     fun refreshBills() = wallet.refreshBills()
+
+    suspend fun getBillDetail(billId: String): BillDetailInfo? = wallet.getBillDetail(billId)
 
     fun loadSpendingStats(force: Boolean = false): Job? = wallet.loadSpendingStats(force)
 

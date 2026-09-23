@@ -6,6 +6,7 @@ import androidx.compose.runtime.setValue
 import com.github.ilife798.data.api.DevResult
 import com.github.ilife798.data.api.IlifeApi
 import com.github.ilife798.data.model.AppState
+import com.github.ilife798.data.model.BillDetailInfo
 import com.github.ilife798.data.model.BillRecord
 import com.github.ilife798.data.model.RechargeProduct
 import com.github.ilife798.data.model.RefundProgress
@@ -80,6 +81,13 @@ class WalletBillController(
     private var lastSpendingLoadTime = 0L
 
     private fun currentToken(): String = getState().account.preferredToken
+
+    // 账单详情（bill/view-full）
+    suspend fun getBillDetail(billId: String): BillDetailInfo? {
+        val token = currentToken()
+        if (token.isEmpty()) return null
+        return api.getBillDetail(token, billId)
+    }
 
     fun reset() {
         clearBillPaging()

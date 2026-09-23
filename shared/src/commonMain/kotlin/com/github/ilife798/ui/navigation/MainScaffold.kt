@@ -31,6 +31,7 @@ import androidx.navigationevent.compose.NavigationBackHandler
 import androidx.navigationevent.compose.rememberNavigationEventState
 import com.github.ilife798.data.viewmodel.AppViewModel
 import com.github.ilife798.ui.page.account.AccountPage
+import com.github.ilife798.ui.page.bill.BillDetailPage
 import com.github.ilife798.ui.page.bill.BillPage
 import com.github.ilife798.ui.page.device.DeviceAddPage
 import com.github.ilife798.ui.page.device.DeviceDetailPage
@@ -425,6 +426,16 @@ fun MainScaffold(viewModel: AppViewModel) {
                 NavEntry(interceptPredictiveBack, onBack) {
                     BillPage(
                         viewModel = viewModel,
+                        onBack = onBack,
+                        onRecordClick = { navigate(Page.BillDetail(it)) },
+                    )
+                }
+            }
+            entry<Page.BillDetail>(transition = detailTransition) { key ->
+                NavEntry(interceptPredictiveBack, onBack) {
+                    BillDetailPage(
+                        viewModel = viewModel,
+                        billId = key.billId,
                         onBack = onBack,
                     )
                 }

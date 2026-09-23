@@ -17,6 +17,10 @@ sealed class Page : NavKey {
 
     @Serializable data object Bill : Page()
 
+    @Serializable data class BillDetail(
+        val billId: String,
+    ) : Page()
+
     @Serializable data object DeviceAdd : Page()
 
     @Serializable data object DeviceScan : Page()

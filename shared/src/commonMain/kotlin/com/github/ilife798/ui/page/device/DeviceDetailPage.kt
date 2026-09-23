@@ -35,6 +35,7 @@ import com.github.ilife798.showToast
 import com.github.ilife798.ui.component.BlurredTopAppBar
 import com.github.ilife798.ui.component.ConfirmDialog
 import com.github.ilife798.ui.component.DeviceIcon
+import com.github.ilife798.ui.component.InfoRow
 import com.github.ilife798.ui.component.PageScrollColumn
 import com.github.ilife798.ui.component.SectionHeader
 import com.github.ilife798.ui.component.StatusPill
@@ -482,39 +483,6 @@ private fun DeviceInfoCard(
                 InfoRow("联系电话", contactPhone, onValueClick = { copyToClipboard(contactPhone, "已复制联系电话") })
             }
         }
-    }
-}
-
-@Composable
-private fun InfoRow(
-    label: String,
-    value: String,
-    onValueClick: (() -> Unit)? = null,
-) {
-    Row(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .padding(vertical = 6.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            text = label,
-            style = MiuixTheme.textStyles.body2,
-            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-        )
-        Text(
-            text = value,
-            style = MiuixTheme.textStyles.body2,
-            color = MiuixTheme.colorScheme.onSurface,
-            modifier =
-                if (onValueClick != null) {
-                    Modifier.clickable(onClick = onValueClick)
-                } else {
-                    Modifier
-                },
-        )
     }
 }
 

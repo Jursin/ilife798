@@ -172,6 +172,26 @@ data class BillRecord(
     val time: Long = 0L,
 )
 
+// 账单详情（bill/view-full 的 data.bill + data.cnt）
+data class BillDetailInfo(
+    val id: String = "",
+    val cata: Int = 0,
+    val type: Int = 0,
+    val msg: String = "",
+    val status: Int = 0,
+    val dir: Int = 1,
+    val payment: Double = 0.0,
+    val discount: Double = 0.0,
+    val ctime: Long = 0L,
+    val utime: Long = 0L,
+    val enterpriseName: String = "",
+    val deviceId: String = "",
+    val deviceName: String = "",
+    val deviceDtype: Int = 0,
+    val couponCount: Int = 0,
+    val promoName: String = "",
+)
+
 enum class ThemeMode { Light, Dark, System }
 
 enum class PaletteStyle(

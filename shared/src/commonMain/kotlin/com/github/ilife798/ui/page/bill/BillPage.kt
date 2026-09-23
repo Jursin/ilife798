@@ -7,6 +7,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -26,6 +27,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.github.ilife798.data.model.BillRecord
@@ -85,6 +87,7 @@ private val billStatusOptions =
 fun BillPage(
     viewModel: AppViewModel,
     onBack: () -> Unit,
+    onRecordClick: (String) -> Unit = {},
 ) {
     val state = viewModel.state
     val wallets = state.wallets
@@ -192,6 +195,7 @@ fun BillPage(
                                 loadingMore = viewModel.billLoadingMore,
                                 hasMore = viewModel.billHasMore,
                                 isLoggedIn = isLoggedIn,
+                                onRecordClick = onRecordClick,
                             )
                         }
 
@@ -382,6 +386,7 @@ private fun BillRecordsCard(
     loadingMore: Boolean,
     hasMore: Boolean,
     isLoggedIn: Boolean,
+    onRecordClick: (String) -> Unit,
 ) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp)) {
@@ -390,7 +395,7 @@ private fun BillRecordsCard(
                 EmptyStateText(isLoggedIn)
             } else {
                 records.forEach { record ->
-                    BillRecordRow(record)
+                    BillRecordRow(record, onRecordClick)
                 }
                 ListLoadMoreFooter(loadingMore = loadingMore, hasMore = hasMore)
             }
@@ -399,21 +404,18 @@ private fun BillRecordsCard(
 }
 
 @Composable
-private fun BillRecordRow(record: BillRecord) {
+private fun BillRecordRow(
+    record: BillRecord,
+    onRecordClick: (String) -> Unit,
+) {
     val isRefund = record.dir == 2
     val amountColor = if (isRefund) MiuixTheme.colorScheme.primary else MiuixTheme.colorScheme.onSurface
-    val statusColor =
-        when {
-            isRefund -> if (record.status == 3) MiuixTheme.colorScheme.primary else MiuixTheme.colorScheme.error
-            record.status == 3 -> MiuixTheme.colorScheme.primary
-            record.status == 4 -> MiuixTheme.colorScheme.error
-            record.status == 1 -> MiuixTheme.colorScheme.error
-            else -> MiuixTheme.colorScheme.onSurfaceVariantSummary
-        }
+    val statusColor = billStatusColor(record.status, record.dir)
     Row(
         modifier =
             Modifier
                 .fillMaxWidth()
+                .clickable { onRecordClick(record.id) }
                 .padding(vertical = 6.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
@@ -652,7 +654,25 @@ private fun BalanceText(
     )
 }
 
-private fun paymentTypeName(type: Int): String =
+// ProductType（bill.cata）→ 名称
+internal fun productTypeName(cata: Int): String =
+    when (cata) {
+        -1 -> "无限制"
+        1 -> "钱包充值"
+        2 -> "家政服务"
+        3 -> "E袋洗"
+        4 -> "零售商品"
+        5 -> "押金"
+        6 -> "设备消费"
+        7 -> "设备充值"
+        9 -> "VIP会员卡"
+        10 -> "权益商品"
+        11 -> "缴费服务"
+        12 -> "积分抽奖"
+        else -> "未知类型"
+    }
+
+internal fun paymentTypeName(type: Int): String =
     when (type) {
         11 -> "微信（APP）"
         12 -> "微信（公众号）"
@@ -672,7 +692,7 @@ private fun paymentTypeName(type: Int): String =
         else -> "其他"
     }
 
-private fun billStatusName(
+internal fun billStatusName(
     status: Int,
     dir: Int,
 ): String {
@@ -687,3 +707,17 @@ private fun billStatusName(
         else -> "未知状态"
     }
 }
+
+// 账单状态展示色（列表行与详情页共用）
+@Composable
+internal fun billStatusColor(
+    status: Int,
+    dir: Int,
+): Color =
+    when {
+        dir == 2 -> if (status == 3) MiuixTheme.colorScheme.primary else MiuixTheme.colorScheme.error
+        status == 3 -> MiuixTheme.colorScheme.primary
+        status == 4 -> MiuixTheme.colorScheme.error
+        status == 1 -> MiuixTheme.colorScheme.error
+        else -> MiuixTheme.colorScheme.onSurfaceVariantSummary
+    }

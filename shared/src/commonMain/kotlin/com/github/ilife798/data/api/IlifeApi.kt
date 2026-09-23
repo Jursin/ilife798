@@ -1,5 +1,6 @@
 package com.github.ilife798.data.api
 
+import com.github.ilife798.data.model.BillDetailInfo
 import com.github.ilife798.data.model.BillRecord
 import com.github.ilife798.data.model.DeviceDetailInfo
 import com.github.ilife798.data.model.DeviceGoods
@@ -771,6 +772,43 @@ class IlifeApi(
         val bill = body.obj("data")?.obj("bill") ?: return false
         if (bill.str("id") != billId) return false
         return bill.intOrNull("status") == 3
+    }
+
+    // 账单详情（bill/view-full：data.bill + data.cnt）
+    suspend fun getBillDetail(
+        token: String,
+        billId: String,
+    ): BillDetailInfo? {
+        if (billId.isEmpty()) return null
+        val response =
+            client.apiGet("bill/view-full") {
+                parameter("id", billId)
+                apiHeaders(token, APP_TYPE_DEVICE)
+            }
+        val body = bodyJson(response, reportError = false)
+        if (body.intOrNull("code") != 0) return null
+        val data = body.obj("data") ?: return null
+        val bill = data.obj("bill") ?: return null
+        val ep = bill.obj("ep")
+        val dev = bill.obj("dev")
+        return BillDetailInfo(
+            id = bill.str("id", billId),
+            cata = bill.int("cata"),
+            type = bill.int("type"),
+            msg = bill.str("msg"),
+            status = bill.int("status"),
+            dir = bill.int("dir", 1),
+            payment = bill.double("payment"),
+            discount = bill.double("discount"),
+            ctime = bill.long("ctime"),
+            utime = bill.long("utime"),
+            enterpriseName = ep?.str("name") ?: "",
+            deviceId = dev?.str("id") ?: "",
+            deviceName = dev?.str("name") ?: "",
+            deviceDtype = dev?.obj("bm")?.int("dtype") ?: 0,
+            couponCount = data.strOrNull("cnt")?.toIntOrNull() ?: 0,
+            promoName = bill.obj("promo")?.str("name") ?: "",
+        )
     }
 
     private fun readScoreInt(
