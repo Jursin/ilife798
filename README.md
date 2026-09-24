@@ -18,33 +18,36 @@
     <td><picture><source media="(prefers-color-scheme: dark)" srcset="docs/dark/1.png"><img alt="" src="docs/light/1.png"></picture></td>
     <td><picture><source media="(prefers-color-scheme: dark)" srcset="docs/dark/2.png"><img alt="" src="docs/light/2.png"></picture></td>
     <td><picture><source media="(prefers-color-scheme: dark)" srcset="docs/dark/3.png"><img alt="" src="docs/light/3.png"></picture></td>
+    <td><picture><source media="(prefers-color-scheme: dark)" srcset="docs/dark/4.png"><img alt="" src="docs/light/4.png"></picture></td>
   </tr>
   <tr>
-    <td><picture><source media="(prefers-color-scheme: dark)" srcset="docs/dark/4.png"><img alt="" src="docs/light/4.png"></picture></td>
     <td><picture><source media="(prefers-color-scheme: dark)" srcset="docs/dark/5.png"><img alt="" src="docs/light/5.png"></picture></td>
     <td><picture><source media="(prefers-color-scheme: dark)" srcset="docs/dark/6.png"><img alt="" src="docs/light/6.png"></picture></td>
+    <td><picture><source media="(prefers-color-scheme: dark)" srcset="docs/dark/7.png"><img alt="" src="docs/light/7.png"></picture></td>
+    <td><picture><source media="(prefers-color-scheme: dark)" srcset="docs/dark/8.png"><img alt="" src="docs/light/8.png"></picture></td>
   </tr>
 </table>
 
 ## ✨ 功能特性
 
 - **设备：**
-  - 输入设备编号/扫码添加设备
-  - 启动/停止/删除设备
-  - 可切换设备类型
+  - 设备列表显示设备类型 Tab
+  - 输入设备编号/扫码/NFC 识别添加设备
+  - 设备详情页使用/结算设备、收藏/取消收藏、创建快捷设置图块（Android 13+ 可一键添加，更低版本需在快捷设置面板手动添加）、开启积分自动抵扣
   - 设备运行中通知（Android 16+ 提升为实时动态）
 - **消费概览：** 展示昨日花费、今日花费、本月平均花费
 - **积分任务：**
-  - 一键运行积分任务
+  - 一键运行积分任务，另完成积分登录后可运行更多任务
   - 显示任务列表、运行记录
   - 积分任务运行中通知（Android 16+ 提升为实时动态）
+- **账号：** 手机号验证码登录，显示头像、昵称、电话号码
 - **我的账单：**
   - 显示详细账单记录，支持切换钱包、账单类型
   - 支持充值/退款
+  - 点击账单记录进入账单详情页面
 - **积分明细：**
   - 显示可用积分、累计积分、详细积分记录，支持切换积分类型
   - 支持积分兑换
-- **账号：** 手机号验证码登录，另完成积分登录后可运行更多任务
 - **外观设置：**
   - 浅色/深色主题模式
   - 应用模糊效果（Android 13+）
@@ -59,7 +62,6 @@
   - 支持设置 GitHub 加速地址
   - 后台下载时通知栏显示进度（iOS 无）
 - **开发者模式：** 连点版本行 5 次开启/关闭，支持点击账号行进入账号信息页面
-- 长按设备支持创建快捷设置图块（Android 13+ 可一键添加，更低版本需在快捷设置面板手动添加）
 - 桌面快捷方式长按菜单显示“扫一扫”、“积分任务”入口（Android）
 - 宽屏设备自动使用侧边导航
 
