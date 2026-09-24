@@ -150,9 +150,7 @@ private class SkippedDepthScope(
 }
 
 // DeviceAdd 路由：跳过时前移深度 + scrim 归零；opaqueDepth=2 保证 Home 在 depth 2 不被窗口裁掉
-private fun NavTransition.withDeviceAddSkip(
-    isSkipping: (NavTransitionScope) -> Boolean,
-): NavTransition =
+private fun NavTransition.withDeviceAddSkip(isSkipping: (NavTransitionScope) -> Boolean): NavTransition =
     object : NavTransition {
         private val base = this@withDeviceAddSkip
 
@@ -168,8 +166,7 @@ private fun NavTransition.withDeviceAddSkip(
 
         override val motion: NavMotion get() = base.motion
 
-        override fun scrimFraction(scope: NavTransitionScope): Float =
-            if (isSkipping(scope)) 0f else base.scrimFraction(scope)
+        override fun scrimFraction(scope: NavTransitionScope): Float = if (isSkipping(scope)) 0f else base.scrimFraction(scope)
     }
 
 @Composable
