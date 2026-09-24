@@ -39,7 +39,7 @@ enum class HomeDeviceType(
     }
 }
 
-// 设备可选项（来自 /ui/app/dev/status?more=true 的 bm.parts）
+// 设备可选项（来自 ui/app/dev/home/1 的 bm.parts）
 data class DeviceOption(
     val mode: Int = -1,
     val name: String = "",
@@ -53,14 +53,7 @@ data class DeviceGoods(
     val out: Int = 0,
 )
 
-// 设备启动可选项集合
-data class DeviceStartOptions(
-    val parts: List<DeviceOption> = emptyList(),
-    val subCount: Int = 0,
-    val goods: List<DeviceGoods> = emptyList(),
-)
-
-// 设备通道状态（/ui/app/dev/status?more=true 的 device.subs）
+// 设备通道状态（ui/app/dev/home/1 的 device.subs）
 data class DeviceSubState(
     val status: Int? = null,
     val err: Int? = null,
@@ -70,7 +63,7 @@ data class DeviceSubState(
     val available: Boolean get() = (err ?: 0) == 0 && (status == null || status == 99)
 }
 
-// 设备详情（/ui/app/dev/status?more=true 全量解析）
+// 设备详情（ui/app/dev/home/1?apply=6 全量解析）
 data class DeviceDetailInfo(
     val id: String = "",
     val name: String = "",
@@ -79,9 +72,6 @@ data class DeviceDetailInfo(
     val geneStatus: Int = 0,
     // 预计结束时间（毫秒）
     val geneEndTime: Long = 0L,
-    // 免费时段（秒）
-    val expS: Long = 0L,
-    val expE: Long = 0L,
     val enterpriseName: String = "",
     val enterpriseAbbr: String = "",
     val contactPhone: String = "",
@@ -89,8 +79,6 @@ data class DeviceDetailInfo(
     val subs: List<DeviceSubState> = emptyList(),
     val goods: List<DeviceGoods> = emptyList(),
     val sensors: List<Int> = emptyList(),
-    val payTypes: List<Int> = emptyList(),
-    val userId: String = "",
 )
 
 data class PointsInfo(

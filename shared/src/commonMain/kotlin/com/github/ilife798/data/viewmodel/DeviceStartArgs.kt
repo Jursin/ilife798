@@ -1,10 +1,10 @@
 package com.github.ilife798.data.viewmodel
 
-import com.github.ilife798.data.model.DeviceStartOptions
+import com.github.ilife798.data.model.DeviceGoods
 
 // 通道设备固定 {pos,mode}，其余有模式走 {mode,ext}，仅通道走 {pos,mode:null}
 internal fun buildDeviceDetailStartArgs(
-    options: DeviceStartOptions,
+    goods: List<DeviceGoods>,
     partMode: Int?,
     channelIndex: Int,
     passageDevice: Boolean,
@@ -14,7 +14,7 @@ internal fun buildDeviceDetailStartArgs(
         return """{"pos":$channelIndex,"mode":${partMode ?: "null"}}"""
     }
     if (partMode != null) {
-        val ext = options.goods.joinToString(",") { """{"pos":${it.pos},"out":${it.out}}""" }
+        val ext = goods.joinToString(",") { """{"pos":${it.pos},"out":${it.out}}""" }
         return """{"mode":$partMode,"ext":[$ext]}"""
     }
     if (channelIndex >= 0) {

@@ -11,6 +11,12 @@ object DeviceLinkParser {
     private val bm = Regex("^(http|https)://.+/q/\\d+/bm\\?/[a-zA-Z0-9-]+.*")
     private val generic = Regex("^(http|https)://.+/q/\\d+/[a-zA-Z0-9-]+.*")
 
+    // 设备编号格式（AddDeviceActivity → p.w）：12-16 位小写字母和数字
+    private val deviceIdFormat = Regex("[0-9a-z]{12,16}")
+
+    // 手动输入的设备编号是否合法
+    fun isValidDeviceId(id: String): Boolean = deviceIdFormat.matches(id)
+
     // @param deviceId 可直接作为设备编号使用
     // @param qrId 需通过 /qr/use 换取设备信息
     data class Result(

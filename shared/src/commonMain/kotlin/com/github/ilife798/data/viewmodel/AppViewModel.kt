@@ -528,8 +528,8 @@ class AppViewModel : ViewModel() {
 
     fun toggleDeviceFavorite(
         deviceId: String,
-        followed: Boolean,
-    ) = device.toggleDeviceFavorite(deviceId, followed)
+        currentlyFollowed: Boolean,
+    ) = device.toggleDeviceFavorite(deviceId, currentlyFollowed)
 
     fun loadDeviceDetail(deviceId: String): Job? = device.loadDeviceDetail(deviceId)
 

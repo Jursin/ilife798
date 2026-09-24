@@ -18,6 +18,7 @@ import com.github.ilife798.util.currentTimeFormatted
 import com.github.ilife798.util.currentTimeMillis
 import com.github.ilife798.util.formatTimestamp
 import com.github.ilife798.util.getTodayStart
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.joinAll
@@ -82,11 +83,18 @@ class WalletBillController(
 
     private fun currentToken(): String = getState().account.preferredToken
 
-    // 账单详情（bill/view-full）
+    // 账单详情（bill/view-full）；网络异常返回 null 由页面展示失败态
     suspend fun getBillDetail(billId: String): BillDetailInfo? {
         val token = currentToken()
         if (token.isEmpty()) return null
-        return api.getBillDetail(token, billId)
+        return try {
+            api.getBillDetail(token, billId)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            onLogError("getBillDetail", e)
+            null
+        }
     }
 
     fun reset() {

@@ -267,16 +267,12 @@ fun MainScaffold(viewModel: AppViewModel) {
             { page -> if (backStack.lastOrNull() != page) backStack.add(page) }
         }
 
-    val interceptPredictiveBack = !predictiveBackEnabled && backStack.size > 1
+    val clearToRoot: () -> Unit =
+        remember(backStack) {
+            { while (backStack.size > 1) backStack.removeLastOrNull() }
+        }
 
-    // 扫码解析完成：自动收藏并跳转对应设备详情页
-    val scannedDeviceId = viewModel.scannedDeviceId
-    LaunchedEffect(scannedDeviceId) {
-        if (scannedDeviceId == null) return@LaunchedEffect
-        viewModel.consumeScannedDeviceId()
-        viewModel.addDevice(scannedDeviceId)
-        navigate(Page.DeviceDetail(scannedDeviceId))
-    }
+    val interceptPredictiveBack = !predictiveBackEnabled && backStack.size > 1
 
     val pagerState = rememberPagerState(pageCount = { 3 })
     val coroutineScope = rememberCoroutineScope()
@@ -284,12 +280,23 @@ fun MainScaffold(viewModel: AppViewModel) {
     val navBarBackdrop = rememberAppBlurBackdrop(viewModel.state.appBlur)
     val navRailState = rememberNavigationRailState()
 
+    // 扫码/NFC 解析完成：自动收藏，清栈回首页并打开对应设备详情页
+    val scannedDeviceId = viewModel.scannedDeviceId
+    LaunchedEffect(scannedDeviceId) {
+        if (scannedDeviceId == null) return@LaunchedEffect
+        viewModel.consumeScannedDeviceId()
+        viewModel.addDevice(scannedDeviceId)
+        clearToRoot()
+        mainPagerState.animateToPage(0)
+        navigate(Page.DeviceDetail(scannedDeviceId))
+    }
+
     // 平台 Intent/快捷方式/通知触发的导航与操作
     AppIntentEffects(
         viewModel = viewModel,
         mainPagerState = mainPagerState,
         navigate = navigate,
-        clearToRoot = { while (backStack.size > 1) backStack.removeLastOrNull() },
+        clearToRoot = clearToRoot,
     )
 
     LaunchedEffect(pagerState.currentPage) {
@@ -448,7 +455,11 @@ fun MainScaffold(viewModel: AppViewModel) {
                         onScanClick = {
                             navigate(Page.DeviceScan)
                         },
-                        onNavigateToDevice = { id -> navigate(Page.DeviceDetail(id)) },
+                        onNavigateToDevice = { id ->
+                            // 先移除“添加设备”页，返回详情页时不回到过期表单
+                            onBack()
+                            navigate(Page.DeviceDetail(id))
+                        },
                     )
                 }
             }

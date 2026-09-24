@@ -20,7 +20,8 @@ xcodebuild \
   archive \
   CODE_SIGNING_ALLOWED=NO \
   CODE_SIGNING_REQUIRED=NO \
-  CODE_SIGN_IDENTITY=""
+  CODE_SIGN_IDENTITY="" \
+  COMPILER_INDEX_STORE_ENABLE=NO
 
 APP_PATH="$ARCHIVE_PATH/Products/Applications/iosApp.app"
 test -d "$APP_PATH" || { echo "错误：归档中未找到 $APP_PATH" >&2; exit 1; }

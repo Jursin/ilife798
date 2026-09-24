@@ -8,7 +8,9 @@ on:
     tags:
       - 'v*'
     paths-ignore:
+      - 'iosApp/**'
       - '.github/workflows/**'
+      - '**/*.md'
   workflow_dispatch:
 
 permissions:
@@ -159,5 +161,7 @@ jobs:
           if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
             gh release upload "$GITHUB_REF_NAME" "${assets[@]}" --clobber
           else
-            gh release create "$GITHUB_REF_NAME" "${assets[@]}" --generate-notes
+            # iOS 工作流可能已抢先创建同名 release，创建失败时改为上传
+            gh release create "$GITHUB_REF_NAME" "${assets[@]}" --generate-notes \
+              || gh release upload "$GITHUB_REF_NAME" "${assets[@]}" --clobber
           fi

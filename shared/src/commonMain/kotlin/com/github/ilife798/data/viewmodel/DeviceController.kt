@@ -14,6 +14,7 @@ import com.github.ilife798.data.model.AppState
 import com.github.ilife798.data.model.Device
 import com.github.ilife798.data.model.DeviceDetailInfo
 import com.github.ilife798.data.model.HomeDeviceType
+import com.github.ilife798.logDebug
 import com.github.ilife798.update.requestNotificationPermission
 import com.github.ilife798.util.DeviceLinkParser
 import com.github.ilife798.util.currentTimeMillis
@@ -58,12 +59,12 @@ class DeviceController(
     var scannedDeviceId by mutableStateOf<String?>(null)
         private set
 
-    // 当前打开的设备详情（模式/通道/商家等，status?more=true 全量数据）
+    // 当前打开的设备详情（模式/通道/商家等，ui/app/dev/home/1?apply=6 数据）
     var deviceDetail by mutableStateOf<DeviceDetailInfo?>(null)
         private set
 
-    var detailDeviceId by mutableStateOf<String?>(null)
-        private set
+    // 仅供控制器内部记录详情归属，无 UI 观察者，普通字段即可
+    private var detailDeviceId: String? = null
 
     var pollingDeviceId by mutableStateOf<String?>(null)
         private set
@@ -73,6 +74,20 @@ class DeviceController(
     private var lastDeviceLoadTime = 0L
 
     private fun currentToken(): String = getState().account.preferredToken
+
+    // 设备控制鉴权：优先 appToken（设备通道），缺失时回退积分 token
+    private data class DeviceAuth(
+        val token: String,
+        val appType: String,
+    )
+
+    private fun deviceAuth(): DeviceAuth {
+        val useApp = getState().account.appToken.isNotEmpty()
+        return DeviceAuth(
+            token = if (useApp) getState().account.appToken else getState().account.token,
+            appType = if (useApp) APP_TYPE_DEVICE else APP_TYPE_POINTS,
+        )
+    }
 
     private fun isCurrentToken(token: String): Boolean {
         val account = getState().account
@@ -102,17 +117,19 @@ class DeviceController(
     }
 
     fun updateAutoDeduct(enabled: Boolean) {
-        autoDeduct = enabled
-        val useApp = getState().account.appToken.isNotEmpty()
-        val token = if (useApp) getState().account.appToken else getState().account.token
-        val appType = if (useApp) APP_TYPE_DEVICE else APP_TYPE_POINTS
-        if (token.isEmpty()) return
+        val auth = deviceAuth()
+        if (auth.token.isEmpty()) return
         scope.launch {
             try {
-                val result = api.setUseScore(token, value = if (enabled) 1 else 0, appType = appType)
-                if (!result.success) onToast("设置失败，请稍后再试")
+                val result = api.setUseScore(auth.token, value = if (enabled) 1 else 0, appType = auth.appType)
+                if (result.success) {
+                    autoDeduct = enabled
+                } else {
+                    onToast("设置失败，请稍后再试")
+                }
             } catch (e: Exception) {
                 onLogError("updateAutoDeduct", e)
+                onToast("设置失败，请稍后再试")
             }
         }
     }
@@ -122,11 +139,10 @@ class DeviceController(
         val dtypes = devices.map { it.dtype }.filter { it != 0 }.toSet()
         if (dtypes.isEmpty()) return
         // 优先精确匹配四类场景，全都不是时归入“其它”
-        val matched =
+        homeDeviceType =
             HomeDeviceType.entries
                 .firstOrNull { it != HomeDeviceType.Other && it.deviceType in dtypes }
-                ?: HomeDeviceType.Other.takeIf { dtypes.any { HomeDeviceType.fromDeviceType(it) == HomeDeviceType.Other } }
-        matched?.let { homeDeviceType = it }
+                ?: HomeDeviceType.Other
     }
 
     fun reset() {
@@ -140,18 +156,16 @@ class DeviceController(
     }
 
     fun loadDeviceInfo(force: Boolean = false): Job? {
-        val useApp = getState().account.appToken.isNotEmpty()
-        val token = if (useApp) getState().account.appToken else getState().account.token
-        val appType = if (useApp) APP_TYPE_DEVICE else APP_TYPE_POINTS
-        if (token.isEmpty()) return null
+        val auth = deviceAuth()
+        if (auth.token.isEmpty()) return null
         val now = currentTimeMillis()
         if (!force && now - lastDeviceLoadTime < LOAD_COOLDOWN_MS) return null
         lastDeviceLoadTime = now
         return scope.launch {
             try {
-                val master = api.getMasterDevices(token)
+                val master = api.getMasterDevices(auth.token)
                 // 账号已切换/退出登录，丢弃过期结果
-                if (!isCurrentToken(token)) return@launch
+                if (!isCurrentToken(auth.token)) return@launch
                 // 登录态失效：主接口不再返回账户数据
                 if (master.accountId.isEmpty() && master.devices.isEmpty()) {
                     onSessionExpired()
@@ -162,9 +176,12 @@ class DeviceController(
                     devices.map { dto ->
                         val realStatus =
                             try {
-                                api.getDevStatus(token, dto.id, appType)
+                                api.getDevStatus(auth.token, dto.id, auth.appType)
+                            } catch (e: CancellationException) {
+                                throw e
                             } catch (e: Exception) {
-                                onLogError("loadDeviceInfo.getDevStatus", e)
+                                // 逐台设备的状态探测失败属预期（离线/超时），仅记消息避免刷屏
+                                logDebug("ILife798", "loadDeviceInfo.getDevStatus: ${e.message}")
                                 null
                             }
                         Device(
@@ -224,16 +241,17 @@ class DeviceController(
         }
     }
 
-    // 离开设备详情页：刷新首页设备列表，并按该设备类型切换首页类型选择
+    // 离开设备详情页：刷新首页设备列表；仅在类型为自动推断时跟随该设备切换，不覆盖用户手选
     fun onDeviceDetailClosed(deviceId: String) {
         scope.launch {
             try {
                 loadDeviceInfo(force = true)?.join()
+                if (homeDeviceTypeExplicit) return@launch
                 getState()
                     .devices
                     .firstOrNull { it.id == deviceId }
                     ?.let { HomeDeviceType.fromDeviceType(it.dtype) }
-                    ?.let { selectHomeDeviceType(it) }
+                    ?.let { homeDeviceType = it }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -297,18 +315,18 @@ class DeviceController(
         }
     }
 
-    // 收藏/取消收藏
+    // 收藏/取消收藏；currentlyFollowed 为当前是否已收藏（决定 remove 方向）
     fun toggleDeviceFavorite(
         deviceId: String,
-        followed: Boolean,
+        currentlyFollowed: Boolean,
     ) {
         val token = currentToken()
         if (token.isEmpty()) return
         scope.launch {
             try {
-                val result = api.devFavo(token, deviceId, remove = followed)
+                val result = api.devFavo(token, deviceId, remove = currentlyFollowed)
                 if (result.success) {
-                    onToast(if (followed) "取消收藏" else "收藏成功")
+                    onToast(if (currentlyFollowed) "取消收藏" else "收藏成功")
                     loadDeviceInfo(force = true)
                 }
             } catch (e: Exception) {
@@ -320,18 +338,18 @@ class DeviceController(
 
     // 设备详情页
     fun loadDeviceDetail(deviceId: String): Job? {
-        val useApp = getState().account.appToken.isNotEmpty()
-        val token = if (useApp) getState().account.appToken else getState().account.token
-        val appType = if (useApp) APP_TYPE_DEVICE else APP_TYPE_POINTS
-        if (token.isEmpty()) return null
+        val auth = deviceAuth()
+        if (auth.token.isEmpty()) return null
         if (detailDeviceId != deviceId) {
             detailDeviceId = deviceId
             deviceDetail = null
         }
         return scope.launch {
             try {
-                val detail = api.getDeviceDetail(token, deviceId, appType) ?: return@launch
-                if (!isCurrentToken(token)) return@launch
+                val detail = api.getDeviceDetail(auth.token, deviceId, auth.appType) ?: return@launch
+                if (!isCurrentToken(auth.token)) return@launch
+                // 已切换到其它设备详情，丢弃过期响应
+                if (detailDeviceId != deviceId) return@launch
                 deviceDetail = detail
                 setState { state ->
                     state.copy(
@@ -363,10 +381,8 @@ class DeviceController(
         args: String = "",
         forceStop: Boolean = false,
     ) {
-        val useApp = getState().account.appToken.isNotEmpty()
-        val token = if (useApp) getState().account.appToken else getState().account.token
-        val appType = if (useApp) APP_TYPE_DEVICE else APP_TYPE_POINTS
-        if (token.isEmpty()) return
+        val auth = deviceAuth()
+        if (auth.token.isEmpty()) return
         val deviceName =
             getState()
                 .devices
@@ -376,18 +392,20 @@ class DeviceController(
         pollingDeviceId = deviceId
         scope.launch {
             try {
-                if (!isCurrentToken(token)) return@launch
-                val currentStatus = if (forceStop) null else api.getDevStatus(token, deviceId, appType)
+                if (!isCurrentToken(auth.token)) return@launch
+                val currentStatus = if (forceStop) null else api.getDevStatus(auth.token, deviceId, auth.appType)
                 val starting = !forceStop && currentStatus?.geneStatus == 99
                 val result =
                     if (starting) {
                         requestNotificationPermission()
+                        // 启动前把积分抵扣开关同步到服务端，保证开关与实际扣款方式一致
+                        api.setUseScore(auth.token, value = if (autoDeduct) 1 else 0, appType = auth.appType)
                         // 优先钱袋支付（91），失败时自动切换支付宝免密支付（21）
                         val wallet =
                             api.devStart(
-                                token,
+                                auth.token,
                                 deviceId,
-                                appType,
+                                auth.appType,
                                 ptype = PAY_TYPE_WALLET,
                                 args = args,
                                 reportError = false,
@@ -395,10 +413,10 @@ class DeviceController(
                         if (wallet.success) {
                             wallet
                         } else {
-                            api.devStart(token, deviceId, appType, ptype = PAY_TYPE_ALIPAY, args = args)
+                            api.devStart(auth.token, deviceId, auth.appType, ptype = PAY_TYPE_ALIPAY, args = args)
                         }
                     } else {
-                        api.devEnd(token, deviceId, appType)
+                        api.devEnd(auth.token, deviceId, auth.appType)
                     }
                 if (!result.success) return@launch
                 onToast(if (starting) "设备已启动" else "设备已停止")
@@ -415,8 +433,8 @@ class DeviceController(
                 while (attempt < 5) {
                     attempt++
                     delay(2500.milliseconds)
-                    if (!isCurrentToken(token)) return@launch
-                    newStatus = api.getDevStatus(token, deviceId, appType)
+                    if (!isCurrentToken(auth.token)) return@launch
+                    newStatus = api.getDevStatus(auth.token, deviceId, auth.appType)
                     if (newStatus?.geneStatus != currentStatus?.geneStatus) break
                 }
                 // 第二轮（如需）：25次 × 5秒
@@ -425,12 +443,12 @@ class DeviceController(
                     while (attempt < 25) {
                         attempt++
                         delay(5000.milliseconds)
-                        if (!isCurrentToken(token)) return@launch
-                        newStatus = api.getDevStatus(token, deviceId, appType)
+                        if (!isCurrentToken(auth.token)) return@launch
+                        newStatus = api.getDevStatus(auth.token, deviceId, auth.appType)
                         if (newStatus?.geneStatus != currentStatus?.geneStatus) break
                     }
                 }
-                if (!isCurrentToken(token)) return@launch
+                if (!isCurrentToken(auth.token)) return@launch
                 setState { state ->
                     state.copy(
                         devices =
@@ -485,13 +503,12 @@ class DeviceController(
             scope.launch {
                 while (isActive && runningDevices.isNotEmpty()) {
                     delay(DEVICE_MONITOR_INTERVAL_SECONDS.seconds)
-                    val token = currentToken()
-                    if (token.isEmpty()) break
-                    val appType = if (getState().account.appToken.isNotEmpty()) APP_TYPE_DEVICE else APP_TYPE_POINTS
+                    val auth = deviceAuth()
+                    if (auth.token.isEmpty()) break
                     runningDevices.toMap().forEach { (id, name) ->
                         val status =
                             try {
-                                api.getDevStatus(token, id, appType)
+                                api.getDevStatus(auth.token, id, auth.appType)
                             } catch (e: CancellationException) {
                                 throw e
                             } catch (e: Exception) {

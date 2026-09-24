@@ -37,4 +37,27 @@ class ModelsTest {
         assertFalse(RefundProgress(ctime = -1L).active)
         assertTrue(RefundProgress(ctime = 123L).active)
     }
+
+    @Test
+    fun deviceSubStateAvailable() {
+        assertTrue(DeviceSubState(err = 0, status = 99).available)
+        assertTrue(DeviceSubState(err = null, status = 99).available)
+        assertTrue(DeviceSubState(err = 0, status = null).available)
+        assertTrue(DeviceSubState(err = null, status = null).available)
+        assertFalse(DeviceSubState(err = 1, status = 99).available)
+        assertFalse(DeviceSubState(err = 0, status = 1).available)
+        assertFalse(DeviceSubState(err = 0, status = 98).available)
+    }
+
+    @Test
+    fun deviceDisplayStatusMapping() {
+        assertEquals(DeviceDisplayStatus.Offline, deviceDisplayStatus(deviceStatus = 0, geneStatus = 99, dtype = 10))
+        assertEquals(DeviceDisplayStatus.Online, deviceDisplayStatus(deviceStatus = 1, geneStatus = 99, dtype = 6))
+        assertEquals(DeviceDisplayStatus.Disabled, deviceDisplayStatus(deviceStatus = 1, geneStatus = 98, dtype = 6))
+        assertEquals(DeviceDisplayStatus.Starting, deviceDisplayStatus(deviceStatus = 1, geneStatus = 1, dtype = 10))
+        assertEquals(DeviceDisplayStatus.Starting, deviceDisplayStatus(deviceStatus = 1, geneStatus = 30, dtype = 120))
+        // 非启动过渡类型不进入“启动中”
+        assertEquals(DeviceDisplayStatus.Running, deviceDisplayStatus(deviceStatus = 1, geneStatus = 1, dtype = 6))
+        assertEquals(DeviceDisplayStatus.Running, deviceDisplayStatus(deviceStatus = 1, geneStatus = 5, dtype = 10))
+    }
 }

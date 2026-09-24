@@ -27,6 +27,9 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonObject
 
+// 时间戳毫秒/秒归一阈值（约 1973-03，秒级远小于此值、毫秒级远大于此值）
+private const val MILLIS_THRESHOLD = 100_000_000_000L
+
 class IlifeApi(
     private val client: HttpClient = createHttpClient(),
 ) {
@@ -97,7 +100,7 @@ class IlifeApi(
     suspend fun getCaptcha(key: String): ByteArray {
         val timestamp = currentTimeMillis()
         val response =
-            client.apiGet("/captcha/") {
+            client.apiGet("captcha/") {
                 parameter("s", key)
                 parameter("r", timestamp)
             }
@@ -177,7 +180,7 @@ class IlifeApi(
         val mainValid =
             try {
                 val response =
-                    client.apiGet("/acc/score/mission-lst") {
+                    client.apiGet("acc/score/mission-lst") {
                         apiHeaders(token, APP_TYPE_POINTS)
                     }
                 bodyJson(response, notifyExpiry = false, reportError = false).intOrNull("code") == 0
@@ -345,10 +348,11 @@ class IlifeApi(
         val subs =
             device.arr("subs")?.mapNotNull { item ->
                 val obj = item as? JsonObject ?: return@mapNotNull null
+                val selected = obj.str("isSelect")
                 DeviceSubState(
                     status = obj.intOrNull("status"),
                     err = obj.intOrNull("err"),
-                    isSelect = obj.str("isSelect") == "1" || obj.str("isSelect") == "true",
+                    isSelect = selected == "1" || selected == "true",
                 )
             } ?: emptyList()
         val goods =
@@ -360,11 +364,6 @@ class IlifeApi(
             bm?.arr("sensors")?.mapNotNull { item ->
                 (item as? JsonPrimitive)?.content?.toIntOrNull()
             } ?: emptyList()
-        val payTypes =
-            data.arr("payItems")?.mapNotNull { item ->
-                (item as? JsonObject)?.intOrNull("type")
-                    ?: (item as? JsonPrimitive)?.content?.toIntOrNull()
-            } ?: emptyList()
         return DeviceDetailInfo(
             id = device.str("id", did),
             name = device.str("name"),
@@ -372,8 +371,6 @@ class IlifeApi(
             deviceStatus = device.int("status", 1),
             geneStatus = gene?.int("status") ?: 0,
             geneEndTime = timeToMillis(gene?.long("time") ?: 0L),
-            expS = timeToSeconds(gene?.long("expS") ?: 0L),
-            expE = timeToSeconds(gene?.long("expE") ?: 0L),
             enterpriseName = ep?.str("name") ?: "",
             enterpriseAbbr = ep?.str("abbr") ?: "",
             contactPhone = ep?.obj("contact")?.str("pn") ?: "",
@@ -381,8 +378,6 @@ class IlifeApi(
             subs = subs,
             goods = goods,
             sensors = sensors,
-            payTypes = payTypes,
-            userId = data.obj("user")?.str("id") ?: "",
         )
     }
 
@@ -390,12 +385,9 @@ class IlifeApi(
     private fun timeToMillis(value: Long): Long =
         when {
             value <= 0L -> 0L
-            value < 100_000_000_000L -> value * 1000
+            value < MILLIS_THRESHOLD -> value * 1000
             else -> value
         }
-
-    // expS/expE：毫秒归一为秒
-    private fun timeToSeconds(value: Long): Long = if (value >= 100_000_000_000L) value / 1000 else value
 
     private fun parseDevResult(
         raw: String,
@@ -756,22 +748,13 @@ class IlifeApi(
         return body.obj("data")?.strOrNull("sn")?.takeIf { it.isNotEmpty() && it != "null" }
     }
 
-    // 核验兑换账单是否已完成（status=3）
+    // 核验兑换账单是否已完成（status=3），复用账单详情解析
     suspend fun isExchangeBillCompleted(
         token: String,
         billId: String,
     ): Boolean {
-        if (billId.isEmpty()) return false
-        val response =
-            client.apiGet("bill/view-full") {
-                parameter("id", billId)
-                apiHeaders(token, APP_TYPE_DEVICE)
-            }
-        val body = bodyJson(response, reportError = false)
-        if (body.intOrNull("code") != 0) return false
-        val bill = body.obj("data")?.obj("bill") ?: return false
-        if (bill.str("id") != billId) return false
-        return bill.intOrNull("status") == 3
+        val bill = getBillDetail(token, billId) ?: return false
+        return bill.id == billId && bill.status == 3
     }
 
     // 账单详情（bill/view-full：data.bill + data.cnt）

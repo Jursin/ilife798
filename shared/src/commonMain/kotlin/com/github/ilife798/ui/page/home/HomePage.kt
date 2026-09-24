@@ -17,14 +17,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.github.ilife798.data.model.HomeDeviceType
+import com.github.ilife798.data.model.deviceDisplayStatus
 import com.github.ilife798.data.viewmodel.AppViewModel
 import com.github.ilife798.ui.component.AppPullToRefresh
 import com.github.ilife798.ui.component.BlurredTopAppBar
 import com.github.ilife798.ui.component.DeviceIcon
 import com.github.ilife798.ui.component.EmptyStateText
+import com.github.ilife798.ui.component.HeaderRow
 import com.github.ilife798.ui.component.PageScrollColumn
 import com.github.ilife798.ui.component.StatusPill
-import com.github.ilife798.ui.component.statusTextFor
 import com.github.ilife798.ui.theme.rememberAppBlurBackdrop
 import com.github.ilife798.util.formatMoney
 import top.yukonga.miuix.kmp.basic.Card
@@ -236,30 +237,17 @@ private fun DeviceItem(
     device: com.github.ilife798.data.model.Device,
     onOpen: () -> Unit,
 ) {
-    Row(
+    HeaderRow(
         modifier =
             Modifier
-                .fillMaxWidth()
                 .clickable(onClick = onOpen)
                 .padding(vertical = 8.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        DeviceIcon(dtype = device.dtype, size = 40.dp)
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = device.name.ifEmpty { device.id },
-                style = MiuixTheme.textStyles.title4,
-                color = MiuixTheme.colorScheme.onSurface,
-            )
-            if (device.name.isNotEmpty()) {
-                Text(
-                    text = device.id,
-                    style = MiuixTheme.textStyles.body2,
-                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                )
-            }
-        }
-        StatusPill(statusTextFor(device.deviceStatus, device.geneStatus, device.dtype))
-    }
+        icon = { DeviceIcon(dtype = device.dtype, size = 40.dp) },
+        title = device.name.ifEmpty { device.id },
+        titleStyle = MiuixTheme.textStyles.title4,
+        trailing = {
+            StatusPill(deviceDisplayStatus(device.deviceStatus, device.geneStatus, device.dtype))
+        },
+        id = if (device.name.isNotEmpty()) device.id else "",
+    )
 }

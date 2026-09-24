@@ -33,6 +33,7 @@ import com.github.ilife798.ui.theme.blurAppBarColor
 import com.github.ilife798.ui.theme.captureForBlur
 import com.github.ilife798.ui.theme.primaryButtonColors
 import com.github.ilife798.ui.theme.rememberAppBlurBackdrop
+import com.github.ilife798.util.DeviceLinkParser
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.Icon
@@ -48,9 +49,6 @@ import top.yukonga.miuix.kmp.icon.extended.Back
 import top.yukonga.miuix.kmp.icon.extended.Scan
 import top.yukonga.miuix.kmp.utils.overScrollVertical
 import top.yukonga.miuix.kmp.utils.scrollEndHaptic
-
-// 官方设备编号格式（AddDeviceActivity → p.w）：12-16 位小写字母和数字
-private val DeviceIdRegex = Regex("[0-9a-z]{12,16}")
 
 @Composable
 fun DeviceAddPage(
@@ -145,7 +143,7 @@ fun DeviceAddPage(
                             modifier = Modifier.weight(1f),
                             onClick = {
                                 val id = deviceId.trim()
-                                if (!DeviceIdRegex.matches(id)) {
+                                if (!DeviceLinkParser.isValidDeviceId(id)) {
                                     showToast("请输入12到16位的字母和数字组成的有效设备编号")
                                 } else {
                                     focusManager.clearFocus()

@@ -2,7 +2,9 @@ package com.github.ilife798.util
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class DeviceLinkParserTest {
     @Test
@@ -71,5 +73,17 @@ class DeviceLinkParserTest {
         val result = DeviceLinkParser.parse("hello")
         assertNull(result.deviceId)
         assertNull(result.qrId)
+    }
+
+    @Test
+    fun validDeviceIdFormat() {
+        assertTrue(DeviceLinkParser.isValidDeviceId("abcdef012345"))
+        assertTrue(DeviceLinkParser.isValidDeviceId("863781051223338"))
+        assertTrue(DeviceLinkParser.isValidDeviceId("a".repeat(16)))
+        assertFalse(DeviceLinkParser.isValidDeviceId("abc123"))
+        assertFalse(DeviceLinkParser.isValidDeviceId("a".repeat(17)))
+        assertFalse(DeviceLinkParser.isValidDeviceId("ABCDEF012345"))
+        assertFalse(DeviceLinkParser.isValidDeviceId("abcdef-012345"))
+        assertFalse(DeviceLinkParser.isValidDeviceId(""))
     }
 }

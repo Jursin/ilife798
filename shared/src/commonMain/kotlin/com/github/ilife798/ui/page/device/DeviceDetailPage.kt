@@ -28,19 +28,22 @@ import androidx.compose.ui.unit.dp
 import com.github.ilife798.DeviceTile
 import com.github.ilife798.DeviceTileResult
 import com.github.ilife798.copyToClipboard
-import com.github.ilife798.data.model.DeviceStartOptions
+import com.github.ilife798.data.model.DeviceOption
+import com.github.ilife798.data.model.DeviceSubState
+import com.github.ilife798.data.model.deviceDisplayStatus
 import com.github.ilife798.data.viewmodel.AppViewModel
 import com.github.ilife798.data.viewmodel.buildDeviceDetailStartArgs
 import com.github.ilife798.showToast
 import com.github.ilife798.ui.component.BlurredTopAppBar
 import com.github.ilife798.ui.component.ConfirmDialog
 import com.github.ilife798.ui.component.DeviceIcon
+import com.github.ilife798.ui.component.HeaderRow
 import com.github.ilife798.ui.component.InfoRow
+import com.github.ilife798.ui.component.LoadingCard
 import com.github.ilife798.ui.component.PageScrollColumn
 import com.github.ilife798.ui.component.SectionHeader
 import com.github.ilife798.ui.component.StatusPill
 import com.github.ilife798.ui.component.SwitchPreference
-import com.github.ilife798.ui.component.statusTextFor
 import com.github.ilife798.ui.theme.SettleAmber
 import com.github.ilife798.ui.theme.primaryButtonColors
 import com.github.ilife798.ui.theme.rememberAppBlurBackdrop
@@ -50,7 +53,6 @@ import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.Icon
-import top.yukonga.miuix.kmp.basic.InfiniteProgressIndicator
 import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.Text
@@ -117,7 +119,9 @@ fun DeviceDetailPage(
         liveDevice?.name?.takeIf { it.isNotEmpty() }
             ?: detail?.name?.takeIf { it.isNotEmpty() }
     var cachedName by remember(deviceId) { mutableStateOf("") }
-    if (!resolvedName.isNullOrEmpty()) cachedName = resolvedName
+    LaunchedEffect(resolvedName) {
+        if (!resolvedName.isNullOrEmpty()) cachedName = resolvedName
+    }
     val name = cachedName.ifEmpty { deviceId }
     val dtype = liveDevice?.dtype?.takeIf { it != 0 } ?: detail?.dtype ?: 0
     val geneStatus = liveDevice?.geneStatus ?: detail?.geneStatus ?: 0
@@ -125,13 +129,13 @@ fun DeviceDetailPage(
 
     val parts = detail?.parts ?: emptyList()
     val subs = detail?.subs ?: emptyList()
-    val subCount = subs.size
     val sensors = detail?.sensors ?: emptyList()
     val goods = detail?.goods ?: emptyList()
 
     var selectedMode by remember(deviceId) { mutableStateOf<Int?>(null) }
     var selectedChannel by remember(deviceId) { mutableStateOf(-1) }
     var showStartConfirm by remember(deviceId) { mutableStateOf(false) }
+    var showSettleConfirm by remember(deviceId) { mutableStateOf(false) }
     var showTileConfirm by remember(deviceId) { mutableStateOf(false) }
 
     val followed = state.devices.any { it.id == deviceId }
@@ -153,7 +157,7 @@ fun DeviceDetailPage(
             passageDevice -> timeCtl && parts.isNotEmpty()
             else -> hasRateParts
         }
-    val channelRequired = subCount > 1 || (dtype == DTYPE_CHARGING && subCount > 0)
+    val channelRequired = subs.size > 1 || (dtype == DTYPE_CHARGING && subs.isNotEmpty())
     val needsConfirm =
         when (dtype) {
             DTYPE_CHARGING -> true
@@ -203,13 +207,13 @@ fun DeviceDetailPage(
                 )
             }
         }
-    val buttonEnabled = buttonState.enabled && !isPolling
+    // 详情未加载完成时禁用主按钮，避免回落的默认状态触发错误的启动/结算
+    val buttonEnabled = buttonState.enabled && !isPolling && detail != null
 
     fun doStart() {
-        val options = DeviceStartOptions(parts = parts, subCount = subCount, goods = goods)
         val args =
             buildDeviceDetailStartArgs(
-                options = options,
+                goods = goods,
                 partMode = selectedMode,
                 channelIndex = selectedChannel,
                 passageDevice = passageDevice,
@@ -270,37 +274,42 @@ fun DeviceDetailPage(
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(text = "图块", style = MiuixTheme.textStyles.body2)
                     }
+                    // 未登录时后端收藏接口不可用，禁用按钮
+                    val favColor =
+                        when {
+                            !isLoggedIn -> MiuixTheme.colorScheme.onSurfaceVariantSummary
+                            followed -> MiuixTheme.colorScheme.primary
+                            else -> MiuixTheme.colorScheme.onSurface
+                        }
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier.clickable { viewModel.toggleDeviceFavorite(deviceId, followed) },
+                        modifier =
+                            Modifier.clickable(enabled = isLoggedIn) {
+                                viewModel.toggleDeviceFavorite(deviceId, followed)
+                            },
                     ) {
                         Icon(
                             imageVector = if (followed) MiuixIcons.FavoritesFill else MiuixIcons.Favorites,
                             contentDescription = if (followed) "取消收藏" else "收藏",
                             modifier = Modifier.size(22.dp),
-                            tint =
-                                if (followed) {
-                                    MiuixTheme.colorScheme.primary
-                                } else {
-                                    MiuixTheme.colorScheme.onSurfaceVariantSummary
-                                },
+                            tint = favColor,
                         )
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
                             text = if (followed) "取消" else "收藏",
                             style = MiuixTheme.textStyles.body2,
-                            color =
-                                if (followed) {
-                                    MiuixTheme.colorScheme.primary
-                                } else {
-                                    MiuixTheme.colorScheme.onSurfaceVariantSummary
-                                },
+                            color = favColor,
                         )
                     }
                     Button(
                         modifier = Modifier.weight(1f),
                         onClick = {
-                            if (buttonState.isStart) onStartClick() else viewModel.toggleDeviceRunning(deviceId)
+                            when {
+                                buttonState.isStart -> onStartClick()
+
+                                // 结束付费会话前需二次确认，与启动确认保持一致
+                                else -> showSettleConfirm = true
+                            }
                         },
                         enabled = buttonEnabled,
                         colors =
@@ -341,29 +350,7 @@ fun DeviceDetailPage(
 
             if (detail == null) {
                 if (isLoggedIn || liveDevice != null) {
-                    Card(modifier = Modifier.fillMaxWidth()) {
-                        Column(modifier = Modifier.padding(16.dp)) {
-                            SectionHeader("设备信息")
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.Center,
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                InfiniteProgressIndicator(
-                                    modifier = Modifier.size(20.dp),
-                                    size = 20.dp,
-                                    strokeWidth = 2.dp,
-                                    orbitingDotSize = 3.dp,
-                                )
-                                Spacer(modifier = Modifier.size(8.dp))
-                                Text(
-                                    text = "正在加载设备信息…",
-                                    style = MiuixTheme.textStyles.body2,
-                                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                                )
-                            }
-                        }
-                    }
+                    LoadingCard(title = "设备信息", message = "正在加载设备信息…")
                 }
             } else {
                 if (parts.isNotEmpty()) {
@@ -377,7 +364,6 @@ fun DeviceDetailPage(
 
                 if (channelRequired) {
                     ChannelCard(
-                        subCount = subCount,
                         subs = subs,
                         selectedChannel = selectedChannel,
                         onSelect = { selectedChannel = it },
@@ -400,6 +386,20 @@ fun DeviceDetailPage(
                 doStart()
             },
             onDismiss = { showStartConfirm = false },
+        )
+    }
+
+    if (showSettleConfirm) {
+        ConfirmDialog(
+            title = "结束使用",
+            message = "确认结束本次使用并结算吗？",
+            appBlur = state.appBlur,
+            confirmText = "结算",
+            onConfirm = {
+                showSettleConfirm = false
+                viewModel.toggleDeviceRunning(deviceId)
+            },
+            onDismiss = { showSettleConfirm = false },
         )
     }
 
@@ -438,41 +438,17 @@ private fun DeviceInfoCard(
     enterpriseAbbr: String,
     contactPhone: String,
 ) {
-    val statusText = statusTextFor(deviceStatus, geneStatus, dtype)
-
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                DeviceIcon(dtype = dtype, size = 40.dp)
-                Column(modifier = Modifier.weight(1f)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(
-                            text = name,
-                            style = MiuixTheme.textStyles.title3,
-                            color = MiuixTheme.colorScheme.onSurface,
-                            modifier = Modifier.weight(1f),
-                        )
-                        StatusPill(statusText)
-                    }
-                    Text(
-                        text = deviceId,
-                        style = MiuixTheme.textStyles.body2,
-                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                        modifier =
-                            Modifier
-                                .padding(top = 2.dp)
-                                .clickable { copyToClipboard(deviceId, "已复制设备编号") },
-                    )
-                }
-            }
+            HeaderRow(
+                icon = { DeviceIcon(dtype = dtype, size = 40.dp) },
+                title = name,
+                trailing = {
+                    StatusPill(deviceDisplayStatus(deviceStatus, geneStatus, dtype))
+                },
+                id = deviceId,
+                onIdClick = { copyToClipboard(deviceId, "已复制设备编号") },
+            )
             if (enterpriseName.isNotEmpty()) {
                 InfoRow("商家", enterpriseName)
             }
@@ -489,7 +465,7 @@ private fun DeviceInfoCard(
 @Composable
 private fun ModeCard(
     dtype: Int,
-    parts: List<com.github.ilife798.data.model.DeviceOption>,
+    parts: List<DeviceOption>,
     selectedMode: Int?,
     onSelect: (Int) -> Unit,
 ) {
@@ -515,17 +491,15 @@ private fun ModeCard(
 
 @Composable
 private fun ChannelCard(
-    subCount: Int,
-    subs: List<com.github.ilife798.data.model.DeviceSubState>,
+    subs: List<DeviceSubState>,
     selectedChannel: Int,
     onSelect: (Int) -> Unit,
 ) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp)) {
             SectionHeader("选择通道")
-            repeat(subCount) { index ->
-                val sub = subs.getOrNull(index)
-                val available = sub?.available ?: true
+            subs.forEachIndexed { index, sub ->
+                val available = sub.available
                 RadioButtonPreference(
                     title = "通道 ${index + 1}",
                     summary =
