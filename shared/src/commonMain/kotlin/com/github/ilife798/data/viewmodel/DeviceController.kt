@@ -214,8 +214,7 @@ class DeviceController(
                 val result = api.devFavo(token, id, remove = false)
                 if (result.success) {
                     onToast("设备已添加")
-                    // 乐观加入收藏列表，使详情页立即显示“已收藏”；
-                    // 完整刷新与首页类型切换延迟到离开详情页时执行
+                    // 乐观加入收藏列表，使详情页立即显示“已收藏”
                     setState { state ->
                         if (state.devices.any { it.id == id }) {
                             state
@@ -233,6 +232,8 @@ class DeviceController(
                             )
                         }
                     }
+                    // 立即按服务端顺序刷新
+                    loadDeviceInfo(force = true)
                 }
             } catch (e: Exception) {
                 onLogError("addDevice", e)

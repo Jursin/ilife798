@@ -19,12 +19,18 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.navigationevent.NavigationEventInfo
 import androidx.navigationevent.compose.NavigationBackHandler
@@ -60,15 +66,22 @@ import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Contacts
 import top.yukonga.miuix.kmp.icon.extended.Home
 import top.yukonga.miuix.kmp.icon.extended.ListView
+import top.yukonga.miuix.kmp.nav.core.LocalNavTransitionScope
 import top.yukonga.miuix.kmp.nav.core.NavCornerClipMode
 import top.yukonga.miuix.kmp.nav.core.NavDisplay
 import top.yukonga.miuix.kmp.nav.core.NavDisplayEffects
 import top.yukonga.miuix.kmp.nav.core.NavKey
 import top.yukonga.miuix.kmp.nav.core.rememberNavBackStack
 import top.yukonga.miuix.kmp.nav.core.rememberNavSystemCornerRadius
+import top.yukonga.miuix.kmp.nav.runtime.NavChange
+import top.yukonga.miuix.kmp.nav.transition.NavGesture
 import top.yukonga.miuix.kmp.nav.transition.NavMotion
+import top.yukonga.miuix.kmp.nav.transition.NavRole
+import top.yukonga.miuix.kmp.nav.transition.NavSettle
 import top.yukonga.miuix.kmp.nav.transition.NavSettleSpec
+import top.yukonga.miuix.kmp.nav.transition.NavSwipeDirection
 import top.yukonga.miuix.kmp.nav.transition.NavTransition
+import top.yukonga.miuix.kmp.nav.transition.NavTransitionScope
 import top.yukonga.miuix.kmp.nav.transition.NavTransitions
 import top.yukonga.miuix.kmp.nav.transition.navGraphicsTransition
 import top.yukonga.miuix.kmp.theme.MiuixTheme
@@ -102,6 +115,61 @@ private val WideScaleTransition: NavTransition =
             scaleY = scale
             alpha = 1f - 0.2f * progress
         }
+    }
+
+// 跳过条件：MultiPop 扫出，或从添加页进入详情后的手势预览
+private fun shouldSkipDeviceAdd(
+    scope: NavTransitionScope,
+    skipArmed: Boolean,
+): Boolean = scope.change is NavChange.MultiPop || (skipArmed && scope.gesture != null)
+
+// 跳过时覆盖层深度前移一层(d-1)使揭示页跟手；仅 depth>0 生效
+private class SkippedDepthScope(
+    private val delegate: NavTransitionScope,
+    private val skipping: () -> Boolean,
+) : NavTransitionScope {
+    override val relativeDepth: Float
+        get() {
+            val raw = delegate.relativeDepth
+            return if (raw > 0f && skipping()) (raw - 1f).coerceAtLeast(0f) else raw
+        }
+
+    override val role: NavRole get() = delegate.role
+
+    override val change: NavChange get() = delegate.change
+
+    override val gesture: NavGesture? get() = delegate.gesture
+
+    override val settle: NavSettle? get() = delegate.settle
+
+    override val layoutSize: IntSize get() = delegate.layoutSize
+
+    override val layoutDirection: LayoutDirection get() = delegate.layoutDirection
+
+    override val density: Density get() = delegate.density
+}
+
+// DeviceAdd 路由：跳过时前移深度 + scrim 归零；opaqueDepth=2 保证 Home 在 depth 2 不被窗口裁掉
+private fun NavTransition.withDeviceAddSkip(
+    isSkipping: (NavTransitionScope) -> Boolean,
+): NavTransition =
+    object : NavTransition {
+        private val base = this@withDeviceAddSkip
+
+        override fun Modifier.transformEntry(scope: NavTransitionScope): Modifier {
+            val modifier = this
+            val shifted = SkippedDepthScope(scope) { isSkipping(scope) }
+            return with(base) { modifier.transformEntry(shifted) }
+        }
+
+        override val opaqueDepth: Float = 2f
+
+        override val dismissDirection: NavSwipeDirection get() = base.dismissDirection
+
+        override val motion: NavMotion get() = base.motion
+
+        override fun scrimFraction(scope: NavTransitionScope): Float =
+            if (isSkipping(scope)) 0f else base.scrimFraction(scope)
     }
 
 @Composable
@@ -255,16 +323,30 @@ fun MainScaffold(viewModel: AppViewModel) {
     val backStack: MutableList<NavKey> = navBackStack
     val floatingNav = viewModel.state.floatingNav
     val predictiveBackEnabled = viewModel.state.predictiveBackEnabled
+    // 已从添加页压入详情：本次返回（含手势预览）跳过添加页
+    val skipDeviceAdd = rememberSaveable { mutableStateOf(false) }
 
     val onBack: () -> Unit =
         remember(backStack) {
-            { backStack.removeLastOrNull() }
+            {
+                val skipAdd =
+                    backStack.size >= 2 &&
+                        backStack.last() is Page.DeviceDetail &&
+                        backStack[backStack.lastIndex - 1] == Page.DeviceAdd
+                backStack.removeLastOrNull()
+                if (skipAdd) {
+                    backStack.removeLastOrNull()
+                }
+            }
         }
 
     // 防止连点重复压入相同路由（Navigation 3 不允许重复 key）
     val navigate: (Page) -> Unit =
         remember(backStack) {
-            { page -> if (backStack.lastOrNull() != page) backStack.add(page) }
+            { page ->
+                if (page == Page.DeviceAdd) skipDeviceAdd.value = false
+                if (backStack.lastOrNull() != page) backStack.add(page)
+            }
         }
 
     val clearToRoot: () -> Unit =
@@ -340,6 +422,11 @@ fun MainScaffold(viewModel: AppViewModel) {
         val wideScreen = maxWidth >= WIDE_SCREEN_MIN_WIDTH
         val wideCornerRadius = rememberNavSystemCornerRadius()
         val detailTransition = if (wideScreen) WideScaleTransition else null
+        val deviceAddTransition =
+            remember(detailTransition) {
+                (detailTransition ?: NavTransitions.MiuixDefault)
+                    .withDeviceAddSkip { scope -> shouldSkipDeviceAdd(scope, skipDeviceAdd.value) }
+            }
         NavDisplay(
             backStack = navBackStack,
             onBack = onBack,
@@ -447,20 +534,30 @@ fun MainScaffold(viewModel: AppViewModel) {
                     )
                 }
             }
-            entry<Page.DeviceAdd>(transition = detailTransition) {
+            entry<Page.DeviceAdd>(transition = deviceAddTransition) {
                 NavEntry(interceptPredictiveBack, onBack) {
-                    DeviceAddPage(
-                        viewModel = viewModel,
-                        onBack = onBack,
-                        onScanClick = {
-                            navigate(Page.DeviceScan)
+                    val scope = LocalNavTransitionScope.current
+                    Box(
+                        Modifier.graphicsLayer {
+                            if (shouldSkipDeviceAdd(scope, skipDeviceAdd.value)) {
+                                alpha = 0f
+                                translationX = scope.layoutSize.width.toFloat()
+                            }
                         },
-                        onNavigateToDevice = { id ->
-                            // 先移除“添加设备”页，返回详情页时不回到过期表单
-                            onBack()
-                            navigate(Page.DeviceDetail(id))
-                        },
-                    )
+                    ) {
+                        DeviceAddPage(
+                            viewModel = viewModel,
+                            onBack = onBack,
+                            onScanClick = {
+                                navigate(Page.DeviceScan)
+                            },
+                            onNavigateToDevice = { id ->
+                                // 压入详情以保留进入动画；跳过添加页见 onBack 与视觉层
+                                skipDeviceAdd.value = true
+                                navigate(Page.DeviceDetail(id))
+                            },
+                        )
+                    }
                 }
             }
             entry<Page.DeviceScan>(transition = detailTransition) {
