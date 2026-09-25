@@ -34,6 +34,8 @@ import com.github.ilife798.getAppVersion
 import com.github.ilife798.getAppVersionCode
 import com.github.ilife798.isIOS
 import com.github.ilife798.showToast
+import com.github.ilife798.supportsDynamicColor
+import com.github.ilife798.supportsPredictiveBack
 import com.github.ilife798.ui.component.DisclaimerDialog
 import com.github.ilife798.ui.component.SwitchPreference
 import com.github.ilife798.ui.theme.ColorSwatchPreview
@@ -95,7 +97,7 @@ internal fun SettingsSection(
                     onCheckedChange = { viewModel.setAppBlur(it) },
                 )
             }
-            if (!isIOS) {
+            if (supportsPredictiveBack) {
                 SwitchPreference(
                     title = "预测性返回动画",
                     summary = "返回滑动前提前预览即将跳转至的界面",
@@ -109,7 +111,7 @@ internal fun SettingsSection(
                 checked = state.customColor,
                 onCheckedChange = { viewModel.setCustomColor(it) },
             )
-            if (!isIOS) {
+            if (supportsDynamicColor) {
                 AnimatedVisibility(
                     visible = state.customColor,
                     enter = fadeIn() + expandVertically(),

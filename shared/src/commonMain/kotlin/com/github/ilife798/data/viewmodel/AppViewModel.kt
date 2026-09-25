@@ -36,6 +36,7 @@ import com.github.ilife798.isIOS
 import com.github.ilife798.logDebug
 import com.github.ilife798.pay.AlipayPayResult
 import com.github.ilife798.showToast
+import com.github.ilife798.supportsDynamicColor
 import com.github.ilife798.toImageBitmap
 import com.github.ilife798.update.UpdateController
 import com.github.ilife798.update.UpdateDialogState
@@ -168,8 +169,8 @@ class AppViewModel : ViewModel() {
             val storage = AppStorage.instance
             state =
                 state.copy(
-                    // iOS 不支持动态取色/模糊/预测性返回：强制为平台默认值
-                    dynamicColor = storage.getBoolean(StorageKeys.DYNAMIC_COLOR, true) && !isIOS,
+                    // 平台不支持的设置项强制为默认值（动态取色需 Android 12+，iOS 不支持）
+                    dynamicColor = storage.getBoolean(StorageKeys.DYNAMIC_COLOR, true) && supportsDynamicColor,
                     customColor = storage.getBoolean(StorageKeys.CUSTOM_COLOR, true),
                     paletteStyle =
                         PaletteStyle.entries.firstOrNull { it.name == storage.getString(StorageKeys.PALETTE_STYLE) }
