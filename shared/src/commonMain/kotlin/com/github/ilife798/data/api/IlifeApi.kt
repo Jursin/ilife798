@@ -181,7 +181,7 @@ class IlifeApi(
             try {
                 val response =
                     client.apiGet("acc/score/mission-lst") {
-                        apiHeaders(token, APP_TYPE_POINTS)
+                        apiHeaders(token, APP_TYPE_DEVICE)
                     }
                 bodyJson(response, notifyExpiry = false, reportError = false).intOrNull("code") == 0
             } catch (_: Exception) {
@@ -405,7 +405,7 @@ class IlifeApi(
     suspend fun getMissionList(token: String): MissionListResult {
         val response =
             client.apiGet("acc/score/mission-lst") {
-                apiHeaders(token, APP_TYPE_POINTS)
+                apiHeaders(token, APP_TYPE_DEVICE)
             }
         val body = bodyJson(response)
         val data = body.obj("data") ?: return MissionListResult(emptyList())
@@ -492,10 +492,10 @@ class IlifeApi(
     ): DevResult {
         val sign = Signer.sign(adId, token, uid)
         val response =
-            client.apiPost("acc/score/score-send?sign=$sign&s=true") {
+            client.apiPost("acc/score/score-send?sign=$sign&s=1") {
                 contentType(ContentType.Application.Json)
                 setBody(body)
-                apiHeaders(token, APP_TYPE_POINTS)
+                apiHeaders(token, APP_TYPE_DEVICE)
             }
         return parseDevResult(response.bodyAsText(), reportError = false)
     }
@@ -512,7 +512,7 @@ class IlifeApi(
                 parameter("size", size.toString())
                 parameter("hasCount", "1")
                 if (src != null) parameter("src", src.toString())
-                apiHeaders(token, APP_TYPE_POINTS)
+                apiHeaders(token, APP_TYPE_DEVICE)
             }
         val body = bodyJson(response)
         val data = body.arr("data") ?: return ScoreListResult(emptyList(), 0)

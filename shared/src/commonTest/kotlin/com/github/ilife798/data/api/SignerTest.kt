@@ -21,4 +21,15 @@ class SignerTest {
         val b = Signer.sign("ad2", "token", "uid")
         assertNotEquals(a, b)
     }
+
+    @Test
+    fun bucketsTimeIn30SecondIntervals() {
+        ApiConfig.init("https://example.com", "salt", "cid")
+        val base = 1790266560000L
+        val a = Signer.signAt("ad", "token-12345678", "uid-12345678", base)
+        val b = Signer.signAt("ad", "token-12345678", "uid-12345678", base + 29999)
+        val c = Signer.signAt("ad", "token-12345678", "uid-12345678", base + 30000)
+        assertEquals(a, b)
+        assertNotEquals(a, c)
+    }
 }

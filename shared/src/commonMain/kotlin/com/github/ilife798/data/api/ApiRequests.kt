@@ -1,5 +1,6 @@
 package com.github.ilife798.data.api
 
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 private const val MISSION_EXEC_TYPE = 101
@@ -36,7 +37,7 @@ data class MissionExecRequest(
 
 @Serializable
 data class SignInRequest(
-    val weekDay: Int,
+    @SerialName("weekday") val weekDay: Int,
     val adId: String,
 )
 

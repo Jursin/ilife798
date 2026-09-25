@@ -2,9 +2,9 @@ package com.github.ilife798.data.api
 
 import com.github.ilife798.isIOS
 
-// ApplicationType：设备控制使用设备登录凭据，积分/钱包使用积分登录凭据。
-const val APP_TYPE_DEVICE = "1,1"
-const val APP_TYPE_POINTS = "1,5"
+// ApplicationType
+const val APP_TYPE_DEVICE = "1,1" // 普通请求的固定值
+const val APP_TYPE_POINTS = "1,5" // 积分登录（acc/login）签发积分 token，普通请求不携带
 
 object ApiConfig {
     var baseUrl: String = ""

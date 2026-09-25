@@ -8,8 +8,15 @@ object Signer {
         adId: String,
         token: String,
         uid: String,
+    ): String = signAt(adId, token, uid, currentTimeMillis())
+
+    internal fun signAt(
+        adId: String,
+        token: String,
+        uid: String,
+        timeMillis: Long,
     ): String {
-        val timeBucket = 10 * (currentTimeMillis() / 10000)
+        val timeBucket = 30 * (timeMillis / 30000)
         val tokenTail = if (token.length >= 8) token.substring(token.length - 8) else token
         val uidTail = if (uid.length >= 8) uid.substring(uid.length - 8) else uid
         val raw = "$adId${timeBucket}${tokenTail}${uidTail}${ApiConfig.signSalt}"

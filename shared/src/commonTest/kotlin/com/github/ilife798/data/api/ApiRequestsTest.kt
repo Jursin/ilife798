@@ -65,7 +65,7 @@ class ApiRequestsTest {
             ),
         )
         assertEquals(
-            """{"weekDay":2,"adId":"ad"}""",
+            """{"weekday":2,"adId":"ad"}""",
             json.encodeToString(SignInRequest.serializer(), SignInRequest(weekDay = 2, adId = "ad")),
         )
         assertEquals(
