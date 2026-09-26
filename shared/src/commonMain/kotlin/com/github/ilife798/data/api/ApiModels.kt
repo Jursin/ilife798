@@ -39,6 +39,8 @@ data class MasterResult(
 data class DevStatusResult(
     val deviceStatus: Int,
     val geneStatus: Int,
+    // gene.time：会话预计结束时间（毫秒），随状态轮询刷新用于“剩余X分钟”
+    val geneEndTime: Long = 0L,
 )
 
 data class DevResult(

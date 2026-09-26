@@ -511,6 +511,7 @@ class AppViewModel : ViewModel() {
     val scannedDeviceId: String? get() = device.scannedDeviceId
     val deviceDetail: DeviceDetailInfo? get() = device.deviceDetail
     val pollingDeviceId: String? get() = device.pollingDeviceId
+    val startingDeviceId: String? get() = device.startingDeviceId
     val autoDeduct: Boolean get() = device.autoDeduct
 
     fun selectHomeDeviceType(type: HomeDeviceType) = device.selectHomeDeviceType(type)

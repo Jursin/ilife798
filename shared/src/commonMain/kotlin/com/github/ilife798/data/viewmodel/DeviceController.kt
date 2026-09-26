@@ -69,6 +69,10 @@ class DeviceController(
     var pollingDeviceId by mutableStateOf<String?>(null)
         private set
 
+    // 启动请求进行中，详情页主按钮显示“启动中”，状态确认后恢复
+    var startingDeviceId by mutableStateOf<String?>(null)
+        private set
+
     private val runningDevices = mutableMapOf<String, String>()
     private var deviceMonitorJob: Job? = null
     private var lastDeviceLoadTime = 0L
@@ -396,6 +400,7 @@ class DeviceController(
                 if (!isCurrentToken(auth.token)) return@launch
                 val currentStatus = if (forceStop) null else api.getDevStatus(auth.token, deviceId, auth.appType)
                 val starting = !forceStop && currentStatus?.geneStatus == 99
+                if (starting) startingDeviceId = deviceId
                 val result =
                     if (starting) {
                         requestNotificationPermission()
@@ -420,33 +425,20 @@ class DeviceController(
                         api.devEnd(auth.token, deviceId, auth.appType)
                     }
                 if (!result.success) return@launch
-                onToast(if (starting) "设备已启动" else "设备已停止")
-                RunNotifications.updateDevice(deviceId, deviceName, starting)
-                if (starting) {
-                    runningDevices[deviceId] = deviceName
-                    ensureDeviceMonitor()
-                } else {
-                    runningDevices.remove(deviceId)
-                }
-                // 第一轮：5次 × 2.5秒
+                syncRunning(deviceId, deviceName, starting)
+                // 轮询至 geneStatus 变化：第一轮 5×2.5s 快查，未变再第二轮 25×5s 慢查
                 var newStatus: DevStatusResult? = null
-                var attempt = 0
-                while (attempt < 5) {
-                    attempt++
-                    delay(2500.milliseconds)
+                var remaining = 5
+                var stepMs = 2500L
+                while (remaining > 0) {
+                    remaining--
+                    delay(stepMs.milliseconds)
                     if (!isCurrentToken(auth.token)) return@launch
                     newStatus = api.getDevStatus(auth.token, deviceId, auth.appType)
                     if (newStatus?.geneStatus != currentStatus?.geneStatus) break
-                }
-                // 第二轮（如需）：25次 × 5秒
-                if (newStatus?.geneStatus == currentStatus?.geneStatus) {
-                    attempt = 0
-                    while (attempt < 25) {
-                        attempt++
-                        delay(5000.milliseconds)
-                        if (!isCurrentToken(auth.token)) return@launch
-                        newStatus = api.getDevStatus(auth.token, deviceId, auth.appType)
-                        if (newStatus?.geneStatus != currentStatus?.geneStatus) break
+                    if (remaining == 0 && stepMs == 2500L) {
+                        stepMs = 5000L
+                        remaining = 25
                     }
                 }
                 if (!isCurrentToken(auth.token)) return@launch
@@ -465,26 +457,24 @@ class DeviceController(
                             },
                     )
                 }
-                // 详情页同步最新状态
+                // 详情页同步最新状态与会话结束时间（gene.time 用于“剩余X分钟”）
                 if (newStatus != null) {
+                    val status = newStatus
+                    val keepEndTime = deviceDetail?.geneEndTime ?: 0L
                     deviceDetail =
                         deviceDetail
                             ?.takeIf { it.id == deviceId }
-                            ?.copy(geneStatus = newStatus.geneStatus, deviceStatus = newStatus.deviceStatus)
+                            ?.copy(
+                                geneStatus = status.geneStatus,
+                                deviceStatus = status.deviceStatus,
+                                geneEndTime = status.geneEndTime.takeIf { it > 0 } ?: keepEndTime,
+                            )
                 }
-                val isRunning =
-                    newStatus?.geneStatus?.let { it != 99 }
-                        ?: currentStatus?.geneStatus?.let { it != 99 }
-                        ?: false
-                // 启动后以轮询结果校正，停止时已立即上报“已停止”
+                // 启动后以轮询结果校正（停止在请求成功时已上报）
                 if (starting) {
-                    RunNotifications.updateDevice(deviceId, deviceName, isRunning)
-                    if (isRunning) {
-                        runningDevices[deviceId] = deviceName
-                        ensureDeviceMonitor()
-                    } else {
-                        runningDevices.remove(deviceId)
-                    }
+                    // starting=true 蕴含 currentStatus 非空，elvis 结果必非空
+                    val isRunning = (newStatus ?: currentStatus).geneStatus != 99
+                    syncRunning(deviceId, deviceName, isRunning)
                 }
             } catch (e: CancellationException) {
                 throw e
@@ -492,7 +482,23 @@ class DeviceController(
                 onToast("操作失败：${e.message}")
             } finally {
                 if (pollingDeviceId == deviceId) pollingDeviceId = null
+                if (startingDeviceId == deviceId) startingDeviceId = null
             }
+        }
+    }
+
+    // 运行通知与后台监控开关同步（启动请求成功后乐观上报 + 状态轮询校正共用）
+    private fun syncRunning(
+        deviceId: String,
+        deviceName: String,
+        running: Boolean,
+    ) {
+        RunNotifications.updateDevice(deviceId, deviceName, running)
+        if (running) {
+            runningDevices[deviceId] = deviceName
+            ensureDeviceMonitor()
+        } else {
+            runningDevices.remove(deviceId)
         }
     }
 

@@ -59,8 +59,8 @@ data class DeviceSubState(
     val err: Int? = null,
     val isSelect: Boolean = false,
 ) {
-    // err==0 且 status==99 才可选；status 缺失时仅看 err
-    val available: Boolean get() = (err ?: 0) == 0 && (status == null || status == 99)
+    // err 非空且为 0、status==99 才可选
+    val available: Boolean get() = err == 0 && status == 99
 }
 
 // 设备详情（ui/app/dev/home/1?apply=6 全量解析）
@@ -79,6 +79,10 @@ data class DeviceDetailInfo(
     val subs: List<DeviceSubState> = emptyList(),
     val goods: List<DeviceGoods> = emptyList(),
     val sensors: List<Int> = emptyList(),
+    // 固件版本（device.fmv）
+    val fmv: String = "",
+    // 网关类型（device.gtype，6=海尔网关）
+    val gtype: Int = 0,
 )
 
 data class PointsInfo(

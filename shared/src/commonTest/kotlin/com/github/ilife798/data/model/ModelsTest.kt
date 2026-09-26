@@ -41,12 +41,13 @@ class ModelsTest {
     @Test
     fun deviceSubStateAvailable() {
         assertTrue(DeviceSubState(err = 0, status = 99).available)
-        assertTrue(DeviceSubState(err = null, status = 99).available)
-        assertTrue(DeviceSubState(err = 0, status = null).available)
-        assertTrue(DeviceSubState(err = null, status = null).available)
+        assertFalse(DeviceSubState(err = null, status = 99).available)
+        assertFalse(DeviceSubState(err = 0, status = null).available)
+        assertFalse(DeviceSubState(err = null, status = null).available)
         assertFalse(DeviceSubState(err = 1, status = 99).available)
         assertFalse(DeviceSubState(err = 0, status = 1).available)
         assertFalse(DeviceSubState(err = 0, status = 98).available)
+        assertFalse(DeviceSubState(err = null, status = 0).available)
     }
 
     @Test

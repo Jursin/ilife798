@@ -260,6 +260,7 @@ class IlifeApi(
         val response =
             client.apiGet("dev/end") {
                 parameter("did", did)
+                parameter("rcp", "false")
                 apiHeaders(token, appType)
             }
         return parseDevResult(response.bodyAsText())
@@ -311,8 +312,12 @@ class IlifeApi(
         val body = bodyJson(response, reportError = false)
         if (body.intOrNull("code") != 0) return null
         val device = body.obj("data")?.obj("device") ?: return null
-        val geneStatus = device.obj("gene")?.intOrNull("status") ?: 0
-        return DevStatusResult(deviceStatus = device.int("status"), geneStatus = geneStatus)
+        val gene = device.obj("gene")
+        return DevStatusResult(
+            deviceStatus = device.int("status"),
+            geneStatus = gene?.intOrNull("status") ?: 0,
+            geneEndTime = timeToMillis(gene?.long("time") ?: 0L),
+        )
     }
 
     // 设备详情页数据：官方详情页初始化走 home/1?apply=6（BaseDeviceDetailActivity.d(id, 6)），
@@ -378,6 +383,8 @@ class IlifeApi(
             subs = subs,
             goods = goods,
             sensors = sensors,
+            fmv = device.str("fmv", ""),
+            gtype = device.int("gtype", 0),
         )
     }
 

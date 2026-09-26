@@ -68,34 +68,110 @@ private const val DTYPE_CHARGING = 120
 private const val DTYPE_HAIR_DRIER = 20
 private const val SENSOR_MULTIPLE = 12
 private const val SENSOR_TIME_CTL = 13
+private const val HAIR_DRIER_FMV_BUILD = 311
+private const val GATEWAY_HAIER = 6
+
+// 固定程序类（洗/烘/鞋）：运行中仅展示状态，不允许手动结算，程序结束由服务端结算
+private val PROGRAM_DTYPES = setOf(10, 80, 90)
+
+// 仅充电桩（有 subs）与吹风机（一拖多传感器、有 subs 且固件末段版本 > 311）启动前要求选通道
+internal fun isChannelRequired(
+    dtype: Int,
+    subsCount: Int,
+    sensors: List<Int>,
+    fmv: String = "",
+): Boolean =
+    when (dtype) {
+        DTYPE_CHARGING -> subsCount > 0
+        DTYPE_HAIR_DRIER -> SENSOR_MULTIPLE in sensors && subsCount > 0 && fmvBuildOver(fmv)
+        else -> false
+    }
+
+// fmv 按 "." 分段取末段转数值，须大于 311；不可解析按 false
+private fun fmvBuildOver(fmv: String): Boolean =
+    fmv
+        .split(".")
+        .lastOrNull()
+        ?.toIntOrNull()
+        ?.let { it > HAIR_DRIER_FMV_BUILD } ?: false
 
 // 支持的设备类型描述，其余走“设备”兜底
 private fun dtypeLabel(dtype: Int): String =
     when (dtype) {
+        5 -> "水控/直饮机"
         6 -> "水表/淋浴器"
         8 -> "管线/饮水机"
+        9 -> "净/热水主机"
         10 -> "洗衣机"
         20 -> "吹风机"
+        21 -> "洗发/沐浴露主机"
+        30 -> "自动售货机"
+        35 -> "售卡/充值机"
+        45 -> "电话机"
+        50 -> "门禁"
+        60 -> "消费机"
+        70 -> "开卡器"
+        75 -> "充电宝"
+        80 -> "烘干机"
+        90 -> "洗鞋机"
+        95 -> "计量控制器"
+        100 -> "取件柜"
+        110 -> "分拣台"
+        115 -> "查询屏"
+        120 -> "充电桩"
+        130 -> "定时控制器"
+        140 -> "打卡机"
         else -> "设备"
     }
 
-// 启动确认文案
-private fun startConfirmMessage(
+// 启动确认文案：洗/烘/鞋按网关区分——海尔网关（gtype=6）带模式名，其余固定文案
+internal fun startConfirmMessage(
     dtype: Int,
     modeName: String,
-): String =
-    when (dtype) {
+    gtype: Int = 0,
+): String {
+    val machine =
+        when (dtype) {
+            10 -> "洗衣机"
+            80 -> "烘干机"
+            90 -> "洗鞋机"
+            else -> null
+        }
+    if (machine != null) {
+        val haier = gtype == GATEWAY_HAIER
+        val item = if (dtype == 90 && haier) "鞋子" else "衣物"
+        return if (haier) {
+            "请确认已将${item}放入$machine，确认选择${modeName}模式"
+        } else {
+            "请确认是否将${item}放入$machine，点击确定之后，${machine}将开始运行"
+        }
+    }
+    return when (dtype) {
         DTYPE_CHARGING -> "确认开始充电？"
-        10 -> "请确认已将衣物放入洗衣机，确认选择${modeName}模式"
         else -> "请确认选择的模式，点击确定之后，设备将开始运行"
     }
+}
 
 private data class UseButtonState(
     val text: String,
     val enabled: Boolean,
     val settle: Boolean,
     val isStart: Boolean,
-)
+) {
+    companion object {
+        // 禁用态（未登录/启动中/离线/禁用/无费率）：启动按钮不可点
+        fun disabled(text: String) = UseButtonState(text, enabled = false, settle = false, isStart = true)
+
+        // 待机启动态
+        fun start(text: String) = UseButtonState(text, enabled = true, settle = false, isStart = true)
+
+        // 结算态；enabled=false 为固定程序的“运行中”禁用态
+        fun settle(
+            text: String,
+            enabled: Boolean = true,
+        ) = UseButtonState(text, enabled = enabled, settle = true, isStart = false)
+    }
+}
 
 @Composable
 fun DeviceDetailPage(
@@ -131,6 +207,8 @@ fun DeviceDetailPage(
     val subs = detail?.subs ?: emptyList()
     val sensors = detail?.sensors ?: emptyList()
     val goods = detail?.goods ?: emptyList()
+    val fmv = detail?.fmv ?: ""
+    val gtype = detail?.gtype ?: 0
 
     var selectedMode by remember(deviceId) { mutableStateOf<Int?>(null) }
     var selectedChannel by remember(deviceId) { mutableStateOf(-1) }
@@ -140,10 +218,10 @@ fun DeviceDetailPage(
 
     val followed = state.devices.any { it.id == deviceId }
 
-    // 服务端默认选中的通道（isSelect）预选
+    // 服务端默认选中的通道（isSelect）预选，仅通道设备生效；仅接受可用通道
     LaunchedEffect(detail) {
-        if (detail != null && selectedChannel < 0) {
-            val index = detail.subs.indexOfFirst { it.isSelect }
+        if (detail != null && selectedChannel < 0 && isChannelRequired(dtype, detail.subs.size, sensors, fmv)) {
+            val index = detail.subs.indexOfFirst { it.isSelect && it.available }
             if (index >= 0) selectedChannel = index
         }
     }
@@ -157,7 +235,7 @@ fun DeviceDetailPage(
             passageDevice -> timeCtl && parts.isNotEmpty()
             else -> hasRateParts
         }
-    val channelRequired = subs.size > 1 || (dtype == DTYPE_CHARGING && subs.isNotEmpty())
+    val channelRequired = isChannelRequired(dtype, subs.size, sensors, fmv)
     val needsConfirm =
         when (dtype) {
             DTYPE_CHARGING -> true
@@ -167,44 +245,53 @@ fun DeviceDetailPage(
 
     val isPolling = viewModel.pollingDeviceId == deviceId
     val isOffline = deviceStatus == 0
+    val now = currentTimeMillis()
+    val endTime = detail?.geneEndTime ?: 0L
+
+    // 运行剩余分钟（一拖多且未到预计结束时间；固定程序须 TIME_CTL 触发）
+    fun remainMinutes(timeCtlGate: Boolean): Long =
+        if ((!timeCtlGate || timeCtl) && SENSOR_MULTIPLE in sensors && endTime > now) {
+            ((endTime - now) / 60000).coerceAtLeast(1)
+        } else {
+            0L
+        }
     val buttonState =
         when {
             !isLoggedIn -> {
-                UseButtonState("请先登录", enabled = false, settle = false, isStart = true)
+                UseButtonState.disabled("请先登录")
+            }
+
+            // 启动请求进行中
+            viewModel.startingDeviceId == deviceId -> {
+                UseButtonState.disabled("启动中")
             }
 
             isOffline -> {
-                UseButtonState("设备离线", enabled = false, settle = false, isStart = true)
+                UseButtonState.disabled("设备离线")
+            }
+
+            // 无费率先于禁用判定
+            partsNoRate -> {
+                UseButtonState.disabled("未设置费率信息")
             }
 
             geneStatus == 98 -> {
-                UseButtonState("禁用", enabled = false, settle = false, isStart = true)
-            }
-
-            partsNoRate -> {
-                UseButtonState("未设置费率信息", enabled = false, settle = false, isStart = true)
+                UseButtonState.disabled("禁用")
             }
 
             geneStatus == 99 -> {
-                UseButtonState(
-                    if (dtype == DTYPE_CHARGING) "开始充电" else "立即使用",
-                    enabled = true,
-                    settle = false,
-                    isStart = true,
-                )
+                UseButtonState.start(if (dtype == DTYPE_CHARGING) "开始充电" else "立即使用")
+            }
+
+            // 固定程序运行中不提供手动结算（运行中/剩余分钟，琥珀禁用）
+            dtype in PROGRAM_DTYPES -> {
+                val remain = remainMinutes(timeCtlGate = true)
+                UseButtonState.settle(if (remain > 0) "剩余${remain}分钟" else "运行中", enabled = false)
             }
 
             else -> {
-                val now = currentTimeMillis()
-                val endTime = detail?.geneEndTime ?: 0L
-                val showRemain = endTime > now && SENSOR_MULTIPLE in sensors
-                val remainMinutes = if (showRemain) ((endTime - now) / 60000).coerceAtLeast(1) else 0L
-                UseButtonState(
-                    if (showRemain) "剩余${remainMinutes}分钟" else "立即结算",
-                    enabled = true,
-                    settle = true,
-                    isStart = false,
-                )
+                val remain = remainMinutes(timeCtlGate = false)
+                UseButtonState.settle(if (remain > 0) "剩余${remain}分钟" else "立即结算")
             }
         }
     // 详情未加载完成时禁用主按钮，避免回落的默认状态触发错误的启动/结算
@@ -217,6 +304,8 @@ fun DeviceDetailPage(
                 partMode = selectedMode,
                 channelIndex = selectedChannel,
                 passageDevice = passageDevice,
+                // 洗衣机且非海尔网关未选模式时仍带 {"mode":-1,...}
+                washingFallbackMode = dtype == 10 && gtype != GATEWAY_HAIER,
             )
         // 始终优先钱包（91）支付，不足时 controller 内自动回退支付宝免密（21）
         viewModel.toggleDeviceRunning(deviceId, args)
@@ -378,7 +467,7 @@ fun DeviceDetailPage(
         val modeName = selectedPart?.name?.ifEmpty { "模式 $selectedMode" } ?: "模式 $selectedMode"
         ConfirmDialog(
             title = "启动设备",
-            message = startConfirmMessage(dtype, modeName),
+            message = startConfirmMessage(dtype, modeName, gtype),
             appBlur = state.appBlur,
             confirmText = "启动",
             onConfirm = {
@@ -504,9 +593,10 @@ private fun ChannelCard(
                     title = "通道 ${index + 1}",
                     summary =
                         when {
-                            !available && sub.err != 0 -> "故障"
-                            !available -> "使用中"
-                            else -> null
+                            available -> "空闲"
+                            sub.status == 99 -> "故障"
+                            sub.status == 98 -> "禁用"
+                            else -> "使用中"
                         },
                     selected = selectedChannel == index,
                     onClick = { onSelect(index) },

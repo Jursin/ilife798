@@ -53,4 +53,33 @@ class DeviceStartArgsTest {
             buildDeviceDetailStartArgs(emptyList(), partMode = null, channelIndex = -1, passageDevice = false),
         )
     }
+
+    @Test
+    fun washingFallbackWithoutModeSendsMinusOne() {
+        assertEquals(
+            """{"mode":-1,"ext":[]}""",
+            buildDeviceDetailStartArgs(
+                emptyList(),
+                partMode = null,
+                channelIndex = -1,
+                passageDevice = false,
+                washingFallbackMode = true,
+            ),
+        )
+    }
+
+    @Test
+    fun washingFallbackKeepsSelectedModeWithGoods() {
+        val goods = listOf(DeviceGoods(pos = 1, out = 2))
+        assertEquals(
+            """{"mode":5,"ext":[{"pos":1,"out":2}]}""",
+            buildDeviceDetailStartArgs(
+                goods,
+                partMode = 5,
+                channelIndex = -1,
+                passageDevice = false,
+                washingFallbackMode = true,
+            ),
+        )
+    }
 }
